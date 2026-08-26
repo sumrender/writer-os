@@ -1,0 +1,110 @@
+book: mini-book
+# Hand-computed ground truth for the synthetic mini-book (see README.md).
+# Every `must` cites the chapters establishing the fact; `must_not` probes are
+# plausible confusions or fabrications the pipelines must not produce.
+assertions:
+  # --- character ---
+  - id: char-mara
+    kind: character
+    expect: must
+    name: Mara Vey
+    evidence: [1]
+
+  - id: char-joren
+    kind: character
+    expect: must
+    name: Joren Vey
+    evidence: [1]
+
+  # --- relationship ---
+  - id: rel-mara-joren-daughter
+    kind: relationship
+    expect: must
+    from: Mara Vey
+    to: Joren Vey
+    type: daughter
+    evidence: [1]
+
+  # negative probe: guards a plausible kinship confusion
+  - id: rel-mara-joren-not-sister
+    kind: relationship
+    expect: must_not
+    from: Mara Vey
+    to: Joren Vey
+    type: sister
+    evidence: [1]
+    note: ch1 states daughter/father only; sister would be fabrication.
+
+  # --- appearance ---
+  - id: appear-mara-coat
+    kind: appearance
+    expect: must
+    character: Mara Vey
+    attribute: her coat
+    contains: salt-white wool
+    evidence: [1]
+
+  # --- item ---
+  - id: item-compass-holder-asof-4
+    kind: item
+    expect: must
+    item: brass compass
+    holder: Joren Vey
+    as_of: 4
+    evidence: [2, 4]
+    note: Holder changes hands in ch4; graded against bible state as of ordinal 4.
+
+  # negative probe: guards the holder swap used by later checker perturbations
+  - id: item-compass-not-bellins
+    kind: item
+    expect: must_not
+    item: brass compass
+    holder: Bellin the harbormaster
+    evidence: [2]
+    note: Bellin never holds the compass anywhere in the book.
+
+  # --- thread ---
+  - id: thread-ledger-resolved-asof-4
+    kind: thread
+    expect: must
+    thread: the missing ledger
+    status: resolved
+    as_of: 4
+    evidence: [2, 4]
+
+  # --- world_rule ---
+  - id: rule-oilless-light
+    kind: world_rule
+    expect: must
+    topic: the northern light burns without oil
+    evidence: [3]
+
+  # negative probe: realist micro-world; absence IS the test
+  - id: rule-no-iron-ships
+    kind: world_rule
+    expect: must_not
+    topic: iron ships
+    note: Nothing establishes iron ships; any extracted such rule is fabrication.
+
+  # --- timeline ---
+  - id: order-bell-before-burn
+    kind: timeline
+    expect: must
+    sequence: ["the harbor bell rang", "the ledger burned"]
+    evidence: [1, 3]
+
+  # --- lexicon ---
+  - id: lex-vess-locked
+    kind: lexicon
+    expect: must
+    term: Vess
+    locked_spelling: true
+    evidence: [2]
+
+  # --- style ---
+  - id: style-narration
+    kind: style
+    expect: must
+    field: narration
+    value: close third person, past tense
+    evidence: [1]

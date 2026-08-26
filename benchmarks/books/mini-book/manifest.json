@@ -1,0 +1,11 @@
+{
+  "book": "mini-book",
+  "title": "The Brass Compass",
+  "source": "Synthetic fixture invented for writer-os; not from any published work",
+  "chapters": [
+    { "ordinal": 1, "file": "source/ch01.txt", "label": "CHAPTER I — THE KEEPER'S DAUGHTER" },
+    { "ordinal": 2, "file": "source/ch02.txt", "label": "CHAPTER II — WHAT THE COMPASS KNOWS" },
+    { "ordinal": 3, "file": "source/ch03.txt", "label": "CHAPTER III — ASHES AT LOW TIDE" },
+    { "ordinal": 4, "file": "source/ch04.txt", "label": "CHAPTER IV — HANDS THAT HOLD" }
+  ]
+}

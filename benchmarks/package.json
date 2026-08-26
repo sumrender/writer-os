@@ -17,7 +17,8 @@
     "books:build": "node scripts/build-books.ts"
   },
   "dependencies": {
-    "openai": "^5.12.2"
+    "openai": "^5.12.2",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

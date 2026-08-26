@@ -1,0 +1,313 @@
+import {
+  THREAD_STATUSES,
+  type AppearanceEntry,
+  type BibleState,
+  type CharacterEntry,
+  type ItemEntry,
+  type LexiconEntry,
+  type RelationshipEntry,
+  type StyleEntry,
+  type ThreadEntry,
+  type ThreadStatus,
+  type WorldRuleEntry,
+} from "./bible.js";
+import type {
+  Check,
+  CheckResult,
+  Extract,
+  Generate,
+  GeneratedChapter,
+} from "./pipeline.js";
+
+/**
+ * Rule-based deterministic pipeline fakes. The mini-book fixture
+ * (books/mini-book) is written against the same sentence grammar, so fake
+ * extraction over it yields hand-computable bible states.
+ *
+ * Grammar — one fact per line, exact templates, case-sensitive:
+ *   Introducing <Name>, <tagline>.                       → character
+ *   <A> is known for <attribute>: <contains>.            → appearance
+ *   <A> is the <relation> of <B>.                        → relationship
+ *   The <item> rests with <holder>.                      → item (holder replaces)
+ *   The matter of <thread> stands open|resolved|dormant. → thread (status replaces)
+ *   In this world, <topic>.                              → world_rule
+ *   It happened that <event>.                            → timeline (appended in read order)
+ *   Say always "<term>", never otherwise.                → lexicon (locked spelling)
+ *   Style decree — <field>: <value>.                     → style
+ *
+ * Lines outside the grammar are ignored: the fake is rule-based, not semantic.
+ * Known limits, deliberate until real pipelines land: fakeCheck flags only
+ * structural contradictions (item holder, thread status, relationship type);
+ * fakeGenerate draws on nothing but its inputs' determinism.
+ */
+
+const NAME = "[A-Z][A-Za-z'’-]*(?: [A-Za-z][A-Za-z'’-]*)*";
+const FREE = "[^.]+";
+
+type ExtractedFact =
+  | ({ readonly kind: "character" } & CharacterEntry)
+  | ({ readonly kind: "appearance" } & AppearanceEntry)
+  | ({ readonly kind: "relationship" } & RelationshipEntry)
+  | ({ readonly kind: "item" } & ItemEntry)
+  | ({ readonly kind: "thread" } & ThreadEntry)
+  | ({ readonly kind: "world_rule" } & WorldRuleEntry)
+  | { readonly kind: "timeline"; readonly event: string }
+  | ({ readonly kind: "lexicon" } & LexiconEntry)
+  | ({ readonly kind: "style" } & StyleEntry);
+
+interface FactRule {
+  readonly pattern: RegExp;
+  readonly fact: (match: RegExpMatchArray) => ExtractedFact;
+}
+
+/**
+ * Capture group `index` exists whenever the rule's pattern matched, so an
+ * undefined group can only mean the pattern and this accessor drifted apart —
+ * asserted once here instead of scattering `!` across every accessor.
+ */
+function group(match: RegExpMatchArray, index: number): string {
+  const value = match[index];
+  if (value === undefined) {
+    throw new Error(`fake grammar: capture group ${index} missing (pattern/accessor drift)`);
+  }
+  return value;
+}
+
+function isThreadStatus(value: unknown): value is ThreadStatus {
+  return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
+}
+
+const RULES: readonly FactRule[] = [
+  {
+    pattern: new RegExp(`^Introducing (${NAME}), (.+)\\.$`),
+    fact: (m) => ({ kind: "character", name: group(m, 1) }),
+  },
+  {
+    pattern: new RegExp(`^(${NAME}) is known for ([^.:]+): ([^.]+)\\.$`),
+    fact: (m) => ({
+      kind: "appearance",
+      character: group(m, 1),
+      attribute: group(m, 2).trim(),
+      contains: group(m, 3).trim(),
+    }),
+  },
+  {
+    pattern: new RegExp(`^(${NAME}) is the ([a-z -]+?) of (${NAME})\\.$`),
+    fact: (m) => ({
+      kind: "relationship",
+      from: group(m, 1),
+      to: group(m, 3),
+      relationType: group(m, 2).trim(),
+    }),
+  },
+  {
+    pattern: new RegExp(`^The (${FREE}?) rests with (${NAME})\\.$`),
+    fact: (m) => ({ kind: "item", item: group(m, 1).trim(), holder: group(m, 2) }),
+  },
+  {
+    pattern: /^The matter of (.+?) stands (.+?)\.$/,
+    fact: (m) => {
+      const status = group(m, 2);
+      if (!isThreadStatus(status)) {
+        throw new Error(
+          `fake grammar: "${status}" is not a thread status (pattern/status drift)`,
+        );
+      }
+      return { kind: "thread", thread: group(m, 1).trim(), status };
+    },
+  },
+  {
+    pattern: new RegExp(`^In this world, (${FREE}?)\\.$`),
+    fact: (m) => ({ kind: "world_rule", topic: group(m, 1).trim() }),
+  },
+  {
+    pattern: new RegExp(`^It happened that (${FREE}?)\\.$`),
+    fact: (m) => ({ kind: "timeline", event: group(m, 1).trim() }),
+  },
+  {
+    pattern: /^Say always "([^."]+)", never otherwise\.$/,
+    fact: (m) => ({ kind: "lexicon", term: group(m, 1).trim(), lockedSpelling: true }),
+  },
+  {
+    pattern: new RegExp(`^Style decree — ([^.:]+): (${FREE}?)\\.$`),
+    fact: (m) => ({
+      kind: "style",
+      field: group(m, 1).trim(),
+      value: group(m, 2).trim(),
+    }),
+  },
+];
+
+function parseFacts(text: string): ExtractedFact[] {
+  const facts: ExtractedFact[] = [];
+  for (const line of text.split(/\r?\n/).map((line) => line.trim())) {
+    if (line.length === 0) continue;
+    for (const rule of RULES) {
+      const match = line.match(rule.pattern);
+      if (match) {
+        facts.push(rule.fact(match));
+        break;
+      }
+    }
+  }
+  return facts;
+}
+
+/** Equality on plain data entries; key order is fixed by our own constructors. */
+function serializedEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function appendIfNew<T>(list: readonly T[], entry: T): T[] {
+  return list.some((existing) => serializedEqual(existing, entry))
+    ? [...list]
+    : [...list, entry];
+}
+
+function replaceOrAppend<T>(
+  list: readonly T[],
+  entry: T,
+  identity: (entry: T) => string,
+): T[] {
+  const key = identity(entry);
+  return list.some((existing) => identity(existing) === key)
+    ? list.map((existing) => (identity(existing) === key ? entry : existing))
+    : [...list, entry];
+}
+
+export function applyFact(bible: BibleState, fact: ExtractedFact): BibleState {
+  switch (fact.kind) {
+    case "character":
+      return {
+        ...bible,
+        characters: appendIfNew(bible.characters, { name: fact.name }),
+      };
+    case "appearance":
+      return {
+        ...bible,
+        appearances: appendIfNew(bible.appearances, {
+          character: fact.character,
+          attribute: fact.attribute,
+          contains: fact.contains,
+        }),
+      };
+    case "relationship":
+      return {
+        ...bible,
+        relationships: replaceOrAppend(
+          bible.relationships,
+          { from: fact.from, to: fact.to, relationType: fact.relationType },
+          (r) => `${r.from}→${r.to}`,
+        ),
+      };
+    case "item":
+      return {
+        ...bible,
+        items: replaceOrAppend(
+          bible.items,
+          { item: fact.item, holder: fact.holder },
+          (i) => i.item,
+        ),
+      };
+    case "thread":
+      return {
+        ...bible,
+        threads: replaceOrAppend(
+          bible.threads,
+          { thread: fact.thread, status: fact.status },
+          (t) => t.thread,
+        ),
+      };
+    case "world_rule":
+      return { ...bible, worldRules: appendIfNew(bible.worldRules, { topic: fact.topic }) };
+    case "timeline":
+      return { ...bible, timeline: appendIfNew(bible.timeline, fact.event) };
+    case "lexicon":
+      return {
+        ...bible,
+        lexicon: appendIfNew(bible.lexicon, {
+          term: fact.term,
+          lockedSpelling: fact.lockedSpelling,
+        }),
+      };
+    case "style":
+      return {
+        ...bible,
+        style: replaceOrAppend(
+          bible.style,
+          { field: fact.field, value: fact.value },
+          (s) => s.field,
+        ),
+      };
+  }
+}
+
+export const fakeExtract: Extract = async (chapterText, _ordinal, bibleSoFar) =>
+  parseFacts(chapterText).reduce((state, fact) => applyFact(state, fact), bibleSoFar);
+
+export const fakeCheck: Check = async (
+  bibleStateAsOf,
+  chapterText,
+): Promise<CheckResult> => {
+  const flags = [];
+  for (const fact of parseFacts(chapterText)) {
+    const flag = contradiction(bibleStateAsOf, fact);
+    if (flag) {
+      flags.push(flag);
+    }
+  }
+  return { flags };
+};
+
+function contradiction(
+  canon: BibleState,
+  fact: ExtractedFact,
+): { kind: ExtractedFact["kind"]; message: string } | undefined {
+  switch (fact.kind) {
+    case "item": {
+      const established = canon.items.find((i) => i.item === fact.item);
+      if (established && established.holder !== fact.holder) {
+        return {
+          kind: "item",
+          message: `item "${fact.item}" is held by "${established.holder}" in canon but the chapter asserts "${fact.holder}"`,
+        };
+      }
+      return undefined;
+    }
+    case "thread": {
+      const established = canon.threads.find((t) => t.thread === fact.thread);
+      if (established && established.status !== fact.status) {
+        return {
+          kind: "thread",
+          message: `thread "${fact.thread}" stands "${established.status}" in canon but the chapter asserts "${fact.status}"`,
+        };
+      }
+      return undefined;
+    }
+    case "relationship": {
+      const established = canon.relationships.find(
+        (r) => r.from === fact.from && r.to === fact.to,
+      );
+      if (established && established.relationType !== fact.relationType) {
+        return {
+          kind: "relationship",
+          message: `"${fact.from}" is the "${established.relationType}" of "${fact.to}" in canon but the chapter asserts "${fact.relationType}"`,
+        };
+      }
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+export const fakeGenerate: Generate = async (context, intent) => {
+  const lines: string[] = [];
+  for (const beat of intent?.beats ?? []) {
+    lines.push(`The story turns on: ${beat}.`);
+  }
+  const ordinal = context.throughOrdinal + 1;
+  lines.push(`Here ends chapter ${ordinal}.`);
+  const chapter: GeneratedChapter = { ordinal, text: `${lines.join("\n")}\n` };
+  return chapter;
+};

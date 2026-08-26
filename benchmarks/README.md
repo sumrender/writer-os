@@ -13,6 +13,15 @@ benchmarks/
   results/        run output — gitignored, never committed
 ```
 
+Fixture-side machinery beside `src/lib/manifest.ts`:
+
+- `lib/assertions.ts` — typed assertion-set schema (nine entity kinds, `must`/`must_not`, `as_of`, evidence) with a validator that rejects malformed sets precisely
+- `lib/assertion-file.ts` — loads and validates a book's `assertions.yml`
+- `lib/pipeline.ts` — the pipeline-under-test port: `extract(chapterText, ordinal, bibleSoFar)`, `check(bibleStateAsOf, chapterText)`, `generate(context, intent?)`, all strict-structured on both boundaries
+- `lib/fakes.ts` — deterministic rule-based implementations of all three ops
+- `lib/extraction-run.ts` — drives extraction sequentially over a book, snapshotting the bible state after each ordinal
+- `books/mini-book` — synthetic fixture whose outcomes are known by construction (`books/mini-book/README.md`)
+
 ## Commands
 
 ```sh
@@ -29,7 +38,7 @@ node dist/cli.js list
 
 Exit codes: `0` ok · `1` fixture validation failure · `2` usage error · `3` requested axis has no registered pipeline yet (validation still ran first).
 
-Axis grading wires up when the pipeline-under-test port lands (issue #7+); until then `run` performs full fixture ingestion/validation and stops. No command in this issue issues an LLM call.
+The pipeline port, fakes, and assertion schema land with issue #7; axis grading wires real pipelines into the port in the follow-up issues. No command in this workspace issues an LLM call yet.
 
 ## Fixture provenance
 
