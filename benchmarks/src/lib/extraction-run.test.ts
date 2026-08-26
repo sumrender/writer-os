@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyBible, type BibleState } from "./bible.js";
-import { runExtraction } from "./extraction-run.js";
+import { canonBeforeOrdinal, runExtraction, snapshotsByOrdinal } from "./extraction-run.js";
 
 const chapters = [
   { ordinal: 1, text: "one" },
@@ -48,5 +48,38 @@ describe("runExtraction", () => {
 
     expect(invoked).toBe(false);
     expect(snapshots).toEqual([]);
+  });
+});
+
+describe("canonBeforeOrdinal", () => {
+  it("returns the empty bible for ordinal 1 regardless of the snapshot map", () => {
+    const canon = canonBeforeOrdinal(1, new Map());
+    expect(canon).toEqual(emptyBible());
+  });
+
+  it("returns the snapshot after the prior ordinal", () => {
+    const priorBible: BibleState = { ...emptyBible(), characters: [{ name: "Mara Vey" }] };
+    const canon = canonBeforeOrdinal(3, new Map([[2, priorBible]]));
+    expect(canon).toBe(priorBible);
+  });
+
+  it("throws precisely when the prior snapshot is missing", () => {
+    expect(() => canonBeforeOrdinal(5, new Map())).toThrow(/no extraction snapshot for chapter 4/i);
+  });
+});
+
+describe("snapshotsByOrdinal", () => {
+  it("indexes each snapshot's bible by its after-ordinal", async () => {
+    const snapshots = await runExtraction(chapters, async (_text, ordinal, soFar) => ({
+      ...soFar,
+      characters: [...soFar.characters, { name: `c${ordinal}` }],
+    }));
+
+    const byOrdinal = snapshotsByOrdinal(snapshots);
+    expect(byOrdinal.get(2)?.characters.map((c) => c.name)).toEqual(["c1", "c2"]);
+  });
+
+  it("yields an empty map for an empty book", () => {
+    expect(snapshotsByOrdinal([]).size).toBe(0);
   });
 });

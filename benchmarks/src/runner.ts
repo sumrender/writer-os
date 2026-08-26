@@ -9,20 +9,24 @@ import {
   type ValidatedChapter,
 } from "./lib/manifest.js";
 import { loadAssertionSet } from "./lib/assertion-file.js";
+import { loadBeatSet } from "./lib/beat-file.js";
 import { DEFAULT_GATES, parseGateConfig, type GateConfig } from "./lib/gates.js";
 import type { Judge } from "./lib/judge.js";
 import { createStubJudge } from "./lib/stub-judge.js";
 import { createLiveJudge } from "./lib/live-judge.js";
 import { CachingJudge } from "./lib/cached-judge.js";
 import { FileVerdictCache } from "./lib/verdict-cache.js";
-import { fakeCheck, fakeExtract } from "./lib/fakes.js";
+import { fakeCheck, fakeExtract, fakeGenerate } from "./lib/fakes.js";
 import { loadPerturbationSet } from "./lib/perturbation-file.js";
 import { RUNS_PER_BOOK } from "./lib/metrics.js";
 import { runExtractionAxis } from "./extraction-axis.js";
 import { runCheckerAxis } from "./checker-axis.js";
+import { runGenerationAxis } from "./generation-axis.js";
 import {
   formatCheckerJsonReport,
   formatCheckerTextReport,
+  formatGenerationJsonReport,
+  formatGenerationTextReport,
   formatJsonReport,
   formatTextReport,
 } from "./report.js";
@@ -213,6 +217,20 @@ function commandValidate(
     : EXIT_OK;
 }
 
+type AxisCommand = (
+  book: LoadedBook,
+  format: Format,
+  options: Options,
+  io: CliIo,
+  overrides: RunCliOverrides,
+) => Promise<number>;
+
+const AXIS_COMMANDS: ReadonlyMap<Axis, AxisCommand> = new Map([
+  ["extraction", runExtractionCommand],
+  ["checker", runCheckerCommand],
+  ["generation", runGenerationCommand],
+]);
+
 async function commandRun(
   options: Options,
   io: CliIo,
@@ -252,11 +270,9 @@ async function commandRun(
 
   const book: LoadedBook = { bookId: id, bookDir: result.bookDir, chapters: result.chapters };
 
-  if (options.axis === "extraction") {
-    return runExtractionCommand(book, format, options, io, overrides);
-  }
-  if (options.axis === "checker") {
-    return runCheckerCommand(book, format, io);
+  const command = AXIS_COMMANDS.get(options.axis);
+  if (command !== undefined) {
+    return command(book, format, options, io, overrides);
   }
 
   io.stdout(
@@ -337,7 +353,9 @@ async function runExtractionCommand(
 async function runCheckerCommand(
   book: LoadedBook,
   format: Format,
+  _options: Options,
   io: CliIo,
+  _overrides: RunCliOverrides,
 ): Promise<number> {
   // Assertions are optional here: books with no authored assertion set yet
   // (checker fixtures precede assertion authoring per docs/TESTING.md §10)
@@ -370,6 +388,52 @@ async function runCheckerCommand(
     io.stdout(formatCheckerJsonReport(report));
   } else {
     for (const line of formatCheckerTextReport(report)) {
+      io.stdout(line);
+    }
+  }
+
+  return report.passed ? EXIT_OK : EXIT_GATE_FAILED;
+}
+
+/**
+ * Generation end-to-end: re-extract canon per run, load the book's beat
+ * declarations, generate each declared chapter from canon strictly before
+ * its ordinal, and dual-grade (beat assertions via the equivalence-only
+ * judge + checker-mediated context assembly). The same judge-cache pattern
+ * as extraction keeps must_include paraphrases offline and regrade-free.
+ */
+async function runGenerationCommand(
+  book: LoadedBook,
+  format: Format,
+  options: Options,
+  io: CliIo,
+  overrides: RunCliOverrides,
+): Promise<number> {
+  const beats = loadBeatSet(book.bookDir, { maxOrdinal: maxOrdinal(book.chapters) });
+  if (!beats.ok) {
+    printValidationErrors(io, book.bookId, beats.errors);
+    return EXIT_VALIDATION_FAILED;
+  }
+
+  const baseJudge = selectJudge(options.judge ?? "stub", io);
+  if (baseJudge === null) return EXIT_USAGE;
+
+  const judge = new CachingJudge(baseJudge, new FileVerdictCache(cachePathOf(options, overrides)));
+
+  const report = await runGenerationAxis({
+    bookId: book.bookId,
+    chapters: book.chapters,
+    beats: beats.set,
+    extract: fakeExtract,
+    generate: fakeGenerate,
+    check: fakeCheck,
+    judge,
+  });
+
+  if (format === "json") {
+    io.stdout(formatGenerationJsonReport(report));
+  } else {
+    for (const line of formatGenerationTextReport(report)) {
       io.stdout(line);
     }
   }

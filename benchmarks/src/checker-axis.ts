@@ -1,5 +1,6 @@
 import type { Check, Extract } from "./lib/pipeline.js";
 import type { PerturbationCase } from "./lib/perturbation-file.js";
+import type { ExtractableChapter } from "./lib/manifest.js";
 import { runExtraction } from "./lib/extraction-run.js";
 import { runCheckerCases } from "./lib/checker-run.js";
 import { RUNS_PER_BOOK, statsOf, type Stats } from "./lib/metrics.js";
@@ -19,7 +20,7 @@ import { RUNS_PER_BOOK, statsOf, type Stats } from "./lib/metrics.js";
 export interface CheckerAxisInput {
   readonly bookId: string;
   /** Chapters in manifest order; extraction re-sorts by ordinal. */
-  readonly chapters: readonly { readonly ordinal: number; readonly text: string }[];
+  readonly chapters: readonly ExtractableChapter[];
   readonly cases: readonly PerturbationCase[];
   readonly extract: Extract;
   readonly check: Check;

@@ -1,0 +1,14 @@
+book: mini-book
+# Beat declarations for the synthetic mini-book (see README.md). Each entry
+# is the per-chapter required and forbidden narrative events a faithful
+# generation of that chapter must satisfy. The mini-book has only one
+# authored beat chapter — the climax, chapter 4 — since chapter 1 acts as
+# the canonical opening and chapters 2-3 are unchanged from the fixture.
+chapters:
+  - ordinal: 4
+    beats:
+      must_include:
+        - "the brass compass passes to Joren Vey"
+        - "the missing ledger is resolved"
+      must_not_include:
+        - "Mara Vey and Joren Vey are revealed as sisters"

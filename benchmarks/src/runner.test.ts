@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   EXIT_GATE_FAILED,
-  EXIT_NOT_IMPLEMENTED,
   EXIT_OK,
   EXIT_USAGE,
   EXIT_VALIDATION_FAILED,
@@ -132,13 +131,14 @@ describe("runCli", () => {
     await expect(runCli(["validate", "--book", "elsewhere"], silent)).resolves.not.toBe(EXIT_OK);
   });
 
-  it("`run` validates first, then reports unimplemented axes (exit 3)", async () => {
+  it("`run` validates first, then runs the generation axis vacuously for a book with no beats.yml", async () => {
     writeBook("tom-sawyer", [1, 2]);
     const io = capture();
     await expect(
       run(["run", "--book", "tom-sawyer", "--axis", "generation"], io),
-    ).resolves.toBe(EXIT_NOT_IMPLEMENTED);
-    expect(io.text).toContain("not implemented");
+    ).resolves.toBe(EXIT_OK);
+    expect(io.out.join("\n")).toContain("generation — tom-sawyer");
+    expect(io.out.join("\n")).toContain("no beat chapters declared");
   });
 
   it("`run` still fails validation-first when the fixture is broken", async () => {
@@ -386,5 +386,51 @@ describe("runCli — checker axis end-to-end (offline)", () => {
       run(["run", "--book", "mini-book", "--axis", "checker"], io),
     ).resolves.toBe(EXIT_VALIDATION_FAILED);
     expect(io.err.join("\n")).toContain("ghost-assertion-id");
+  });
+});
+
+describe("runCli — generation axis end-to-end (offline)", () => {
+  it("dual-grades the mini-book's chapter-4 beats three times and exits 0", async () => {
+    installMiniBook();
+    const io = capture();
+
+    await expect(run(["run", "--book", "mini-book", "--axis", "generation"], io)).resolves.toBe(
+      EXIT_OK,
+    );
+
+    const text = io.out.join("\n");
+    expect(text).toContain("generation — mini-book");
+    expect(text).toContain("runs: 3");
+    expect(text).toContain("chapter 4");
+    expect(text).toContain("beat failure rate 0.000");
+    expect(text).toContain("assembly failure rate 0.000");
+    expect(text).toContain("gates: PASS");
+  });
+
+  it("prints machine-readable JSON when --format json is given", async () => {
+    installMiniBook();
+    const io = capture();
+
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "generation", "--format", "json"], io),
+    ).resolves.toBe(EXIT_OK);
+
+    const parsed = JSON.parse(io.out.join("\n")) as { passed: boolean; axis: string };
+    expect(parsed.passed).toBe(true);
+    expect(parsed.axis).toBe("generation");
+  });
+
+  it("fails validation when beats.yml is present but malformed", async () => {
+    installMiniBook();
+    writeFileSync(
+      join(root, "mini-book", "beats.yml"),
+      "book: mini-book\nchapters: [unclosed",
+    );
+    const io = capture();
+
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "generation"], io),
+    ).resolves.toBe(EXIT_VALIDATION_FAILED);
+    expect(io.err.join("\n")).toContain("beats.yml");
   });
 });

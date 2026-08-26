@@ -1,5 +1,4 @@
-import { emptyBible, type BibleState } from "./bible.js";
-import type { ExtractionSnapshot } from "./extraction-run.js";
+import { canonBeforeOrdinal, snapshotsByOrdinal, type ExtractionSnapshot } from "./extraction-run.js";
 import type { Check } from "./pipeline.js";
 import type { PerturbationCase } from "./perturbation-file.js";
 
@@ -22,26 +21,13 @@ export async function runCheckerCases(
   snapshots: readonly ExtractionSnapshot[],
   check: Check,
 ): Promise<readonly CheckerCaseResult[]> {
-  const canonByOrdinal = new Map(snapshots.map((s) => [s.afterOrdinal, s.bible]));
+  const canonByOrdinal = snapshotsByOrdinal(snapshots);
 
   const results: CheckerCaseResult[] = [];
   for (const { entry, chapterText } of cases) {
-    const canon = canonBefore(entry.baseOrdinal, canonByOrdinal);
+    const canon = canonBeforeOrdinal(entry.baseOrdinal, canonByOrdinal);
     const result = await check(canon, chapterText);
     results.push({ caseId: entry.id, raised: result.flags.length > 0 });
   }
   return results;
-}
-
-function canonBefore(
-  baseOrdinal: number,
-  canonByOrdinal: ReadonlyMap<number, BibleState>,
-): BibleState {
-  if (baseOrdinal === 1) return emptyBible();
-  const priorOrdinal = baseOrdinal - 1;
-  const canon = canonByOrdinal.get(priorOrdinal);
-  if (canon === undefined) {
-    throw new Error(`runCheckerCases: no extraction snapshot for chapter ${priorOrdinal}`);
-  }
-  return canon;
 }

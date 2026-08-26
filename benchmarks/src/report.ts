@@ -1,5 +1,6 @@
 import type { ExtractionAxisReport, KindReport } from "./extraction-axis.js";
 import type { CheckerAxisReport } from "./checker-axis.js";
+import type { GenerationAxisReport } from "./generation-axis.js";
 
 /**
  * Presentation of axis reports (docs/TESTING.md §9): everything a run
@@ -91,5 +92,34 @@ export function formatCheckerTextReport(report: CheckerAxisReport): string[] {
 }
 
 export function formatCheckerJsonReport(report: CheckerAxisReport): string {
+  return JSON.stringify(report, null, 2);
+}
+
+function generationChapterLine(entry: GenerationAxisReport["chapters"][number]): string {
+  return [
+    `  chapter ${entry.ordinal}`,
+    `beat failure rate ${fixed3(entry.beatFailureRate.mean)} ±${fixed3(entry.beatFailureRate.variance)}`,
+    `assembly failure rate ${fixed3(entry.assemblyFailureRate.mean)} ±${fixed3(entry.assemblyFailureRate.variance)}`,
+    `factual flags/run ${fixed3(entry.factualFlags.mean)} ±${fixed3(entry.factualFlags.variance)}`,
+    `pass rate ${fixed3(entry.verdict.mean)} ±${fixed3(entry.verdict.variance)}`,
+  ].join("  ");
+}
+
+export function formatGenerationTextReport(report: GenerationAxisReport): string[] {
+  const lines: string[] = [];
+  lines.push(`generation — ${report.book} (runs: ${report.runs})`);
+  if (report.chapters.length === 0) {
+    lines.push("  no beat chapters declared for this book");
+  } else {
+    lines.push("  per-chapter verdict and failure rates, mean ± variance:");
+    for (const entry of report.chapters) {
+      lines.push(generationChapterLine(entry));
+    }
+  }
+  lines.push(report.passed ? "  gates: PASS" : "  gates: FAIL");
+  return lines;
+}
+
+export function formatGenerationJsonReport(report: GenerationAxisReport): string {
   return JSON.stringify(report, null, 2);
 }

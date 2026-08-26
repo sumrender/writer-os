@@ -35,6 +35,12 @@ export interface ValidatedChapter extends ManifestChapter {
   text: string;
 }
 
+/** Minimal chapter input every axis consumes: its ordinal plus full text. */
+export interface ExtractableChapter {
+  readonly ordinal: number;
+  readonly text: string;
+}
+
 /** Final chapter ordinal for a validated book — the shared "as of" ceiling
  * assertions, perturbations, and CLI commands all check ranges against. */
 export function maxOrdinal(chapters: readonly { readonly ordinal: number }[]): number | undefined {

@@ -1,5 +1,6 @@
 import { ENTITY_KINDS, type EntityKind } from "./lib/bible.js";
 import type { AssertionSet } from "./lib/assertions.js";
+import type { ExtractableChapter } from "./lib/manifest.js";
 import type { Extract } from "./lib/pipeline.js";
 import type { Judge } from "./lib/judge.js";
 import { runExtraction } from "./lib/extraction-run.js";
@@ -27,7 +28,7 @@ import { evaluateGates, type GateConfig, type GateEvaluation } from "./lib/gates
 export interface ExtractionAxisInput {
   readonly bookId: string;
   /** Chapters in manifest order; extraction re-sorts by ordinal. */
-  readonly chapters: readonly { readonly ordinal: number; readonly text: string }[];
+  readonly chapters: readonly ExtractableChapter[];
   readonly assertions: AssertionSet;
   readonly extract: Extract;
   readonly judge: Judge;
