@@ -1,8 +1,9 @@
 import type { ExtractionAxisReport, KindReport } from "./extraction-axis.js";
+import type { CheckerAxisReport } from "./checker-axis.js";
 
 /**
- * Presentation of extraction-axis reports (docs/TESTING.md §9): everything a
- * run produces prints to terminal/CI — nothing is written to tracked paths.
+ * Presentation of axis reports (docs/TESTING.md §9): everything a run
+ * produces prints to terminal/CI — nothing is written to tracked paths.
  * Text for humans, JSON for machines; both derive from the same structure.
  */
 
@@ -54,5 +55,41 @@ export function formatTextReport(report: ExtractionAxisReport): string[] {
 }
 
 export function formatJsonReport(report: ExtractionAxisReport): string {
+  return JSON.stringify(report, null, 2);
+}
+
+function checkerCaseLine(entry: CheckerAxisReport["cases"][number]): string {
+  const outcome = entry.expected === "flag" ? "caught" : "false-positive";
+  return `  ${entry.kind.padEnd(12)}${entry.caseId.padEnd(24)}expect ${entry.expected.padEnd(9)}${outcome} rate ${fixed3(
+    entry.raisedRate.mean,
+  )} ±${fixed3(entry.raisedRate.variance)}`;
+}
+
+export function formatCheckerTextReport(report: CheckerAxisReport): string[] {
+  const lines: string[] = [];
+  lines.push(`checker — ${report.book} (runs: ${report.runs})`);
+  if (report.cases.length === 0) {
+    lines.push("  no perturbation or control cases authored for this book");
+  } else {
+    lines.push("  per-case flag rate, mean ± variance:");
+    for (const entry of report.cases) {
+      lines.push(checkerCaseLine(entry));
+    }
+  }
+  lines.push(
+    `  perturbation catch rate ${fixed3(report.perturbationCatchRate.mean)} ±${fixed3(
+      report.perturbationCatchRate.variance,
+    )} (must-flag)`,
+  );
+  lines.push(
+    `  control false-positive rate ${fixed3(report.controlFalsePositiveRate.mean)} ±${fixed3(
+      report.controlFalsePositiveRate.variance,
+    )} (over-flagging risk)`,
+  );
+  lines.push(report.passed ? "  gates: PASS" : "  gates: FAIL");
+  return lines;
+}
+
+export function formatCheckerJsonReport(report: CheckerAxisReport): string {
   return JSON.stringify(report, null, 2);
 }

@@ -136,7 +136,7 @@ describe("runCli", () => {
     writeBook("tom-sawyer", [1, 2]);
     const io = capture();
     await expect(
-      run(["run", "--book", "tom-sawyer", "--axis", "checker"], io),
+      run(["run", "--book", "tom-sawyer", "--axis", "generation"], io),
     ).resolves.toBe(EXIT_NOT_IMPLEMENTED);
     expect(io.text).toContain("not implemented");
   });
@@ -145,7 +145,7 @@ describe("runCli", () => {
     corrupt("broken-book", (dir) => rmSync(join(dir, "source", "ch02.txt")));
     const io = capture();
     await expect(
-      run(["run", "--book", "broken-book", "--axis", "checker"], io),
+      run(["run", "--book", "broken-book", "--axis", "generation"], io),
     ).resolves.toBe(EXIT_VALIDATION_FAILED);
     expect(io.err.join("\n")).toContain("E_FILE_MISSING");
   });
@@ -314,5 +314,77 @@ describe("runCli — extraction axis end-to-end (offline)", () => {
       globalThis.fetch = failingFetch;
     }
     expect(attemptedNetwork).toBe(true);
+  });
+});
+
+describe("runCli — checker axis end-to-end (offline)", () => {
+  it("runs the mini-book's perturbation and control fixtures and exits 0", async () => {
+    installMiniBook();
+    const io = capture();
+
+    await expect(run(["run", "--book", "mini-book", "--axis", "checker"], io)).resolves.toBe(
+      EXIT_OK,
+    );
+
+    const text = io.out.join("\n");
+    expect(text).toContain("checker — mini-book");
+    expect(text).toContain("ch03-holder-swap");
+    expect(text).toContain("ch01-control");
+    expect(text).toContain("perturbation catch rate 1.000");
+    expect(text).toContain("control false-positive rate 0.000");
+    expect(text).toContain("gates: PASS");
+  });
+
+  it("runs a book with no authored perturbations, reporting vacuous conventions", async () => {
+    writeBook("tom-sawyer", [1, 2, 3]);
+    const io = capture();
+
+    await expect(run(["run", "--book", "tom-sawyer", "--axis", "checker"], io)).resolves.toBe(
+      EXIT_OK,
+    );
+    expect(io.out.join("\n")).toContain("no perturbation or control cases authored");
+  });
+
+  it("prints machine-readable JSON when --format json is given", async () => {
+    installMiniBook();
+    const io = capture();
+
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "checker", "--format", "json"], io),
+    ).resolves.toBe(EXIT_OK);
+
+    const parsed = JSON.parse(io.out.join("\n")) as { passed: boolean; axis: string };
+    expect(parsed.passed).toBe(true);
+    expect(parsed.axis).toBe("checker");
+  });
+
+  it("exits via gate-failed code when a perturbation goes uncaught", async () => {
+    installMiniBook();
+    // Overwrite the edited chapter with the unmodified original so the real
+    // fake checker sees nothing to contradict, forcing a genuine miss
+    // through the actual harness rather than a stubbed checker.
+    const ch03 = join(root, "mini-book", "source", "ch03.txt");
+    const holderSwapTxt = join(root, "mini-book", "perturbations", "ch03-holder-swap.txt");
+    writeFileSync(holderSwapTxt, readFileSync(ch03, "utf8"));
+
+    const io = capture();
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "checker"], io),
+    ).resolves.toBe(EXIT_GATE_FAILED);
+    expect(io.out.join("\n")).toContain("gates: FAIL");
+  });
+
+  it("reports a perturbation referencing an unknown assertion id as a validation failure", async () => {
+    installMiniBook();
+    writeFileSync(
+      join(root, "mini-book", "perturbations", "ch09-ghost.yml"),
+      "kind: perturbation\nid: ch09-ghost\nbase_ordinal: 3\nfile: perturbations/ch03-holder-swap.txt\nedits:\n  - description: x\nviolates: [ghost-assertion-id]\nexpect: flag\n",
+    );
+
+    const io = capture();
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "checker"], io),
+    ).resolves.toBe(EXIT_VALIDATION_FAILED);
+    expect(io.err.join("\n")).toContain("ghost-assertion-id");
   });
 });

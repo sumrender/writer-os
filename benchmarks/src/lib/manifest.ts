@@ -35,6 +35,12 @@ export interface ValidatedChapter extends ManifestChapter {
   text: string;
 }
 
+/** Final chapter ordinal for a validated book — the shared "as of" ceiling
+ * assertions, perturbations, and CLI commands all check ranges against. */
+export function maxOrdinal(chapters: readonly { readonly ordinal: number }[]): number | undefined {
+  return chapters.length > 0 ? Math.max(...chapters.map((c) => c.ordinal)) : undefined;
+}
+
 export type ValidationResult =
   | { ok: true; bookDir: string; manifest: BookManifest; chapters: ValidatedChapter[] }
   | { ok: false; bookDir: string; errors: ValidationError[] };

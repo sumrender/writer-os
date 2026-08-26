@@ -231,6 +231,6 @@ They fail for different reasons: beats fail on content fidelity; checker-mediati
 
 - [x] Download source texts, split into chapters, write manifests (both books)
 - [ ] Author assertion sets (both books) — human-owned, per §5 rules
-- [ ] Edit perturbation chapters + annotations (§7)
+- [ ] Edit perturbation chapters + annotations (§7) for tom-sawyer and gullivers-travels — mini-book's are done (demonstrates the harness); real-book fixtures remain a human task
 - [ ] Declare beats per chapter (§8) — can wait until axis 3
 - [ ] Set gate thresholds after first baseline runs

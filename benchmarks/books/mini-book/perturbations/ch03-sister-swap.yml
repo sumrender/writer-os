@@ -1,0 +1,10 @@
+kind: perturbation
+id: ch03-sister-swap
+base_ordinal: 3
+file: perturbations/ch03-sister-swap.txt
+edits:
+  - description: >-
+      Appended a line restating Mara and Joren's relationship as "sister",
+      contradicting the "daughter" relation established in ch1.
+violates: [rel-mara-joren-not-sister]
+expect: flag

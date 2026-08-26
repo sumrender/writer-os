@@ -4,6 +4,7 @@ import {
   type EntityKind,
   type ThreadStatus,
 } from "./bible.js";
+import { isPlainObject, nonEmptyString, positiveInt, SLUG_PATTERN } from "./schema-primitives.js";
 
 /**
  * Assertion-set schema (docs/TESTING.md §5): the typed, human-verified claims
@@ -133,20 +134,6 @@ const KIND_FIELD_NAMES: Record<AssertionKind, readonly string[]> = {
   lexicon: ["term", "locked_spelling"],
   style: ["field", "value"],
 };
-
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function positiveInt(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1;
-}
 
 function ordinalList(value: unknown): number[] | undefined {
   return Array.isArray(value) && value.length > 0 && value.every(positiveInt)

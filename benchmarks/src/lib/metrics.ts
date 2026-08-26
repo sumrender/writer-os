@@ -6,6 +6,9 @@ import type { EntityKind } from "./bible.js";
  * (mean ± variance across repeated runs). Pure math — no I/O, no judging.
  */
 
+/** Run-protocol default (docs/TESTING.md §9): shared by every axis. */
+export const RUNS_PER_BOOK = 3;
+
 export interface KindCounts {
   /** `must` assertions satisfied. */
   readonly tp: number;

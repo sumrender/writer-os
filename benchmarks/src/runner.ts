@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  maxOrdinal,
   validateBook,
   type BookManifest,
   type ValidationError,
@@ -14,9 +15,17 @@ import { createStubJudge } from "./lib/stub-judge.js";
 import { createLiveJudge } from "./lib/live-judge.js";
 import { CachingJudge } from "./lib/cached-judge.js";
 import { FileVerdictCache } from "./lib/verdict-cache.js";
-import { fakeExtract } from "./lib/fakes.js";
-import { RUNS_PER_BOOK, runExtractionAxis } from "./extraction-axis.js";
-import { formatJsonReport, formatTextReport } from "./report.js";
+import { fakeCheck, fakeExtract } from "./lib/fakes.js";
+import { loadPerturbationSet } from "./lib/perturbation-file.js";
+import { RUNS_PER_BOOK } from "./lib/metrics.js";
+import { runExtractionAxis } from "./extraction-axis.js";
+import { runCheckerAxis } from "./checker-axis.js";
+import {
+  formatCheckerJsonReport,
+  formatCheckerTextReport,
+  formatJsonReport,
+  formatTextReport,
+} from "./report.js";
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -241,23 +250,22 @@ async function commandRun(
     return EXIT_VALIDATION_FAILED;
   }
 
-  if (options.axis !== "extraction") {
-    io.stdout(
-      `axis "${options.axis}" has no pipeline registered yet; fixture ingestion and validation passed`,
-    );
-    io.stderr(
-      `axis "${options.axis}" is not implemented yet (pipeline port lands with the harness work)`,
-    );
-    return EXIT_NOT_IMPLEMENTED;
+  const book: LoadedBook = { bookId: id, bookDir: result.bookDir, chapters: result.chapters };
+
+  if (options.axis === "extraction") {
+    return runExtractionCommand(book, format, options, io, overrides);
+  }
+  if (options.axis === "checker") {
+    return runCheckerCommand(book, format, io);
   }
 
-  return runExtractionCommand(
-    { bookId: id, bookDir: result.bookDir, chapters: result.chapters },
-    format,
-    options,
-    io,
-    overrides,
+  io.stdout(
+    `axis "${options.axis}" has no pipeline registered yet; fixture ingestion and validation passed`,
   );
+  io.stderr(
+    `axis "${options.axis}" is not implemented yet (pipeline port lands with the harness work)`,
+  );
+  return EXIT_NOT_IMPLEMENTED;
 }
 
 interface LoadedBook {
@@ -278,9 +286,7 @@ async function runExtractionCommand(
   io: CliIo,
   overrides: RunCliOverrides,
 ): Promise<number> {
-  const finalOrdinal = Math.max(...book.chapters.map((c) => c.ordinal));
-
-  const assertions = loadAssertionSet(book.bookDir, { maxOrdinal: finalOrdinal });
+  const assertions = loadAssertionSet(book.bookDir, { maxOrdinal: maxOrdinal(book.chapters) });
   if (!assertions.ok) {
     printValidationErrors(io, book.bookId, assertions.errors);
     return EXIT_VALIDATION_FAILED;
@@ -314,6 +320,56 @@ async function runExtractionCommand(
     io.stdout(formatJsonReport(report));
   } else {
     for (const line of formatTextReport(report)) {
+      io.stdout(line);
+    }
+  }
+
+  return report.passed ? EXIT_OK : EXIT_GATE_FAILED;
+}
+
+/**
+ * Checker end-to-end: re-extract canon per run, load the book's perturbation
+ * and control cases, grade must-flag / must-not-flag outcomes against the
+ * fake checker. A book with no authored cases still runs and reports the
+ * vacuous-pass conventions — authoring real perturbations stays a
+ * documented human task (docs/TESTING.md §7).
+ */
+async function runCheckerCommand(
+  book: LoadedBook,
+  format: Format,
+  io: CliIo,
+): Promise<number> {
+  // Assertions are optional here: books with no authored assertion set yet
+  // (checker fixtures precede assertion authoring per docs/TESTING.md §10)
+  // simply skip `violates` cross-checks. A present-but-invalid file still
+  // fails, matching every other validated-input path in this CLI.
+  const assertions = loadAssertionSet(book.bookDir, { maxOrdinal: maxOrdinal(book.chapters) });
+  let assertionIds: ReadonlySet<string> | undefined;
+  if (assertions.ok) {
+    assertionIds = new Set(assertions.set.assertions.map((a) => a.id));
+  } else if (!assertions.errors.every((e) => e.code === "E_ASSERTION_FILE_MISSING")) {
+    printValidationErrors(io, book.bookId, assertions.errors);
+    return EXIT_VALIDATION_FAILED;
+  }
+
+  const perturbations = loadPerturbationSet(book.bookDir, book.chapters, assertionIds);
+  if (!perturbations.ok) {
+    printValidationErrors(io, book.bookId, perturbations.errors);
+    return EXIT_VALIDATION_FAILED;
+  }
+
+  const report = await runCheckerAxis({
+    bookId: book.bookId,
+    chapters: book.chapters,
+    cases: perturbations.cases,
+    extract: fakeExtract,
+    check: fakeCheck,
+  });
+
+  if (format === "json") {
+    io.stdout(formatCheckerJsonReport(report));
+  } else {
+    for (const line of formatCheckerTextReport(report)) {
       io.stdout(line);
     }
   }

@@ -8,6 +8,7 @@ import { bookSourceText, sweepUnmatchedFacts } from "./lib/sweep.js";
 import {
   globalPrecision,
   kindMetrics,
+  RUNS_PER_BOOK,
   statsOf,
   type KindCounts,
   type KindMetrics,
@@ -22,8 +23,6 @@ import { evaluateGates, type GateConfig, type GateEvaluation } from "./lib/gates
  * sweep per run. Per-kind precision/recall/F1 and the estimated fabrication
  * rate aggregate to mean ± variance; gates evaluate against the means.
  */
-
-export const RUNS_PER_BOOK = 3;
 
 export interface ExtractionAxisInput {
   readonly bookId: string;

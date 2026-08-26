@@ -1,0 +1,10 @@
+kind: perturbation
+id: ch03-holder-swap
+base_ordinal: 3
+file: perturbations/ch03-holder-swap.txt
+edits:
+  - description: >-
+      Appended a line reassigning the brass compass to Bellin the
+      harbormaster, contradicting the holder established in ch2 (Mara Vey).
+violates: [item-compass-not-bellins]
+expect: flag
