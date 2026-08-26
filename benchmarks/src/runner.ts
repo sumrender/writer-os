@@ -1,7 +1,22 @@
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateBook, type ValidationResult, type ValidationError } from "./lib/manifest.js";
+import {
+  validateBook,
+  type BookManifest,
+  type ValidationError,
+  type ValidatedChapter,
+} from "./lib/manifest.js";
+import { loadAssertionSet } from "./lib/assertion-file.js";
+import { DEFAULT_GATES, parseGateConfig, type GateConfig } from "./lib/gates.js";
+import type { Judge } from "./lib/judge.js";
+import { createStubJudge } from "./lib/stub-judge.js";
+import { createLiveJudge } from "./lib/live-judge.js";
+import { CachingJudge } from "./lib/cached-judge.js";
+import { FileVerdictCache } from "./lib/verdict-cache.js";
+import { fakeExtract } from "./lib/fakes.js";
+import { RUNS_PER_BOOK, runExtractionAxis } from "./extraction-axis.js";
+import { formatJsonReport, formatTextReport } from "./report.js";
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -12,15 +27,24 @@ export const EXIT_OK = 0;
 export const EXIT_VALIDATION_FAILED = 1;
 export const EXIT_USAGE = 2;
 export const EXIT_NOT_IMPLEMENTED = 3;
+export const EXIT_GATE_FAILED = 4;
 
 const AXES = ["extraction", "checker", "generation"] as const;
 type Axis = (typeof AXES)[number];
 
+const JUDGES = ["stub", "live"] as const;
+const FORMATS = ["text", "json"] as const;
+
 const USAGE = `usage:
   bench validate --book <id> [--books-root <dir>]
-  bench run --book <id> --axis <extraction|checker|generation> [--books-root <dir>]
+  bench run --book <id> --axis <extraction|checker|generation>
+            [--runs <n>] [--judge <stub|live>] [--format <text|json>] [--gates <file>]
+            [--books-root <dir>]
   bench list [--books-root <dir>]
-  bench help`;
+  bench help
+
+extraction defaults: ${RUNS_PER_BOOK} runs · stub judge (offline) · text report · lenient gates
+live judging reads AGNES_API_KEY (and optional AGNES_BASE_URL); verdicts cache by input hash.`;
 
 const defaultBooksRoot = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -32,16 +56,32 @@ interface Options {
   book?: string;
   axis?: string;
   booksRoot?: string;
+  runs?: string;
+  judge?: string;
+  format?: string;
+  gates?: string;
+}
+
+export interface RunCliOverrides {
+  booksRoot?: string;
+  /** Injected by tests so cache writes never leave the sandbox. */
+  judgeCachePath?: string;
+}
+
+interface ResolvedOptions {
+  book: string;
+  axis: Axis;
+  booksRoot: string;
 }
 
 export function runCli(
   argv: string[],
   io: CliIo,
-  overrides: { booksRoot?: string } = {},
-): number {
+  overrides: RunCliOverrides = {},
+): Promise<number> {
   if (argv.length === 0 || argv[0] === "help" || argv[0] === "--help" || argv[0] === "-h") {
     io.stdout(USAGE);
-    return EXIT_OK;
+    return Promise.resolve(EXIT_OK);
   }
 
   const [command, ...rest] = argv;
@@ -51,20 +91,20 @@ export function runCli(
   } catch (cause) {
     io.stderr(String(cause instanceof Error ? cause.message : cause));
     io.stderr(USAGE);
-    return EXIT_USAGE;
+    return Promise.resolve(EXIT_USAGE);
   }
 
   switch (command) {
     case "validate":
-      return commandValidate(options, io, overrides);
+      return Promise.resolve(commandValidate(options, io, overrides));
     case "run":
       return commandRun(options, io, overrides);
     case "list":
-      return commandList(options, io, overrides);
+      return Promise.resolve(commandList(options, io, overrides));
     default:
       io.stderr(`unknown command: ${command}`);
       io.stderr(USAGE);
-      return EXIT_USAGE;
+      return Promise.resolve(EXIT_USAGE);
   }
 }
 
@@ -74,6 +114,10 @@ function parseOptions(tokens: string[]): Options {
     "--book": "book",
     "--axis": "axis",
     "--books-root": "booksRoot",
+    "--runs": "runs",
+    "--judge": "judge",
+    "--format": "format",
+    "--gates": "gates",
   };
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -92,16 +136,8 @@ function parseOptions(tokens: string[]): Options {
   return options;
 }
 
-function booksRootOf(options: Options, overrides: { booksRoot?: string }): string {
+function booksRootOf(options: Options, overrides: RunCliOverrides): string {
   return options.booksRoot ?? overrides.booksRoot ?? defaultBooksRoot;
-}
-
-function requireBook(options: Options, io: CliIo): string | undefined {
-  if (!options.book) {
-    io.stderr("missing required flag: --book <id>");
-    return undefined;
-  }
-  return options.book;
 }
 
 function printValidationSuccess(io: CliIo, id: string, chapters: number): void {
@@ -109,41 +145,56 @@ function printValidationSuccess(io: CliIo, id: string, chapters: number): void {
   io.stdout(`  chapters: ${chapters} (ordinals contiguous from 1)`);
 }
 
-function printValidationErrors(io: CliIo, id: string, errors: ValidationError[]): void {
+function printValidationErrors(
+  io: CliIo,
+  id: string,
+  errors: readonly (ValidationError | { code: string; message: string })[],
+): void {
   io.stderr(`${id}: INVALID (${errors.length} error${errors.length === 1 ? "" : "s"})`);
   for (const error of errors) {
     io.stderr(`  [${error.code}] ${error.message}`);
   }
 }
 
-type BooksRootOverrides = { booksRoot?: string };
+interface ValidatedBook {
+  bookDir: string;
+  manifest: BookManifest;
+  chapters: ValidatedChapter[];
+}
 
 function validateOrReport(
   id: string,
   options: Options,
   io: CliIo,
-  overrides: BooksRootOverrides,
-): ValidationResult | null {
+  overrides: RunCliOverrides,
+): ValidatedBook | null {
   const result = validateBook(join(booksRootOf(options, overrides), id));
   if (!result.ok) {
     printValidationErrors(io, id, result.errors);
     return null;
   }
   printValidationSuccess(io, id, result.chapters.length);
-  return result;
+  return { bookDir: result.bookDir, manifest: result.manifest, chapters: result.chapters };
 }
 
 function isAxis(value: string | undefined): value is Axis {
   return AXES.includes(value as Axis);
 }
 
+type Format = (typeof FORMATS)[number];
+
+function isFormat(value: string): value is Format {
+  return (FORMATS as readonly string[]).includes(value);
+}
+
 function commandValidate(
   options: Options,
   io: CliIo,
-  overrides: BooksRootOverrides,
+  overrides: RunCliOverrides,
 ): number {
-  const id = requireBook(options, io);
+  const id = options.book;
   if (!id) {
+    io.stderr("missing required flag: --book <id>");
     io.stderr(USAGE);
     return EXIT_USAGE;
   }
@@ -153,13 +204,14 @@ function commandValidate(
     : EXIT_OK;
 }
 
-function commandRun(
+async function commandRun(
   options: Options,
   io: CliIo,
-  overrides: BooksRootOverrides,
-): number {
-  const id = requireBook(options, io);
+  overrides: RunCliOverrides,
+): Promise<number> {
+  const id = options.book;
   if (!id) {
+    io.stderr("missing required flag: --book <id>");
     io.stderr(USAGE);
     return EXIT_USAGE;
   }
@@ -171,30 +223,162 @@ function commandRun(
     return EXIT_USAGE;
   }
 
-  const result = validateOrReport(id, options, io, overrides);
+  const format = options.format ?? "text";
+  if (!isFormat(format)) {
+    io.stderr(`--format must be one of ${FORMATS.join(", ")} (got: ${options.format})`);
+    return EXIT_USAGE;
+  }
+
+  // Machine-readable mode keeps stdout pure JSON; validation chatter moves
+  // out of the way (errors already go to stderr regardless).
+  const result = validateOrReport(
+    id,
+    options,
+    format === "json" ? { stdout: () => {}, stderr: io.stderr } : io,
+    overrides,
+  );
   if (!result) {
     return EXIT_VALIDATION_FAILED;
   }
 
-  io.stdout(
-    `axis "${options.axis}" has no pipeline registered yet; fixture ingestion and validation passed`,
+  if (options.axis !== "extraction") {
+    io.stdout(
+      `axis "${options.axis}" has no pipeline registered yet; fixture ingestion and validation passed`,
+    );
+    io.stderr(
+      `axis "${options.axis}" is not implemented yet (pipeline port lands with the harness work)`,
+    );
+    return EXIT_NOT_IMPLEMENTED;
+  }
+
+  return runExtractionCommand(
+    { bookId: id, bookDir: result.bookDir, chapters: result.chapters },
+    format,
+    options,
+    io,
+    overrides,
   );
-  io.stderr(
-    `axis "${options.axis}" is not implemented yet (pipeline port lands with the harness work)`,
+}
+
+interface LoadedBook {
+  readonly bookId: string;
+  readonly bookDir: string;
+  readonly chapters: readonly ValidatedChapter[];
+}
+
+/**
+ * Extraction end-to-end: assertions → N graded runs over the registered
+ * pipeline → cached judge mediation → sweep → gates. Everything prints;
+ * nothing tracked is written except the gitignored verdict cache.
+ */
+async function runExtractionCommand(
+  book: LoadedBook,
+  format: Format,
+  options: Options,
+  io: CliIo,
+  overrides: RunCliOverrides,
+): Promise<number> {
+  const finalOrdinal = Math.max(...book.chapters.map((c) => c.ordinal));
+
+  const assertions = loadAssertionSet(book.bookDir, { maxOrdinal: finalOrdinal });
+  if (!assertions.ok) {
+    printValidationErrors(io, book.bookId, assertions.errors);
+    return EXIT_VALIDATION_FAILED;
+  }
+
+  const gates = loadGateConfig(options, io);
+  if (gates === null) return EXIT_USAGE;
+
+  const runs = parseRunCount(options.runs);
+  if (runs === null) {
+    io.stderr("--runs must be an integer >= 1");
+    return EXIT_USAGE;
+  }
+
+  const baseJudge = selectJudge(options.judge ?? "stub", io);
+  if (baseJudge === null) return EXIT_USAGE;
+
+  const judge = new CachingJudge(baseJudge, new FileVerdictCache(cachePathOf(options, overrides)));
+
+  const report = await runExtractionAxis({
+    bookId: book.bookId,
+    chapters: book.chapters,
+    assertions: assertions.set,
+    extract: fakeExtract,
+    judge,
+    gates,
+    runs,
+  });
+
+  if (format === "json") {
+    io.stdout(formatJsonReport(report));
+  } else {
+    for (const line of formatTextReport(report)) {
+      io.stdout(line);
+    }
+  }
+
+  return report.passed ? EXIT_OK : EXIT_GATE_FAILED;
+}
+
+function loadGateConfig(options: Options, io: CliIo): GateConfig | null {
+  if (options.gates === undefined) return DEFAULT_GATES;
+  if (!existsSync(options.gates)) {
+    io.stderr(`gates file not found: ${options.gates}`);
+    return null;
+  }
+  try {
+    return parseGateConfig(JSON.parse(readFileSync(options.gates, "utf8")));
+  } catch (cause) {
+    io.stderr(
+      `invalid gates file ${options.gates}: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    return null;
+  }
+}
+
+function parseRunCount(raw: string | undefined): number | null {
+  if (raw === undefined) return RUNS_PER_BOOK;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1 ? value : null;
+}
+
+function selectJudge(selection: string, io: CliIo): Judge | null {
+  if (!(JUDGES as readonly string[]).includes(selection)) {
+    io.stderr(`--judge must be one of ${JUDGES.join(", ")} (got: ${selection})`);
+    return null;
+  }
+  if (selection === "stub") return createStubJudge();
+
+  const apiKey = process.env.AGNES_API_KEY;
+  if (apiKey === undefined || apiKey.trim().length === 0) {
+    io.stderr("the live judge requires AGNES_API_KEY in the environment");
+    return null;
+  }
+  const baseUrl = process.env.AGNES_BASE_URL;
+  return createLiveJudge({
+    apiKey,
+    ...(baseUrl !== undefined && baseUrl.trim().length > 0 ? { baseUrl } : {}),
+  });
+}
+
+function cachePathOf(options: Options, overrides: RunCliOverrides): string {
+  return (
+    overrides.judgeCachePath ??
+    join(booksRootOf(options, overrides), "..", "results", "cache", "judge-cache.json")
   );
-  return EXIT_NOT_IMPLEMENTED;
 }
 
 function commandList(
   options: Options,
   io: CliIo,
-  overrides: BooksRootOverrides,
+  overrides: RunCliOverrides,
 ): number {
-  const root = booksRootOf(options, overrides);
+  const rootDir = booksRootOf(options, overrides);
   let anyInvalid = false;
 
-  for (const entry of readdirSync(root).sort()) {
-    const bookDir = join(root, entry);
+  for (const entry of readdirSync(rootDir).sort()) {
+    const bookDir = join(rootDir, entry);
     if (!statSync(bookDir).isDirectory()) continue;
     const result = validateBook(bookDir);
     if (result.ok) {
