@@ -1,0 +1,202 @@
+{
+  "book": "gullivers-travels",
+  "title": "Gulliver's Travels",
+  "source": "Project Gutenberg #829",
+  "chapters": [
+    {
+      "ordinal": 1,
+      "file": "source/ch01.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER I"
+    },
+    {
+      "ordinal": 2,
+      "file": "source/ch02.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER II"
+    },
+    {
+      "ordinal": 3,
+      "file": "source/ch03.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER III"
+    },
+    {
+      "ordinal": 4,
+      "file": "source/ch04.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER IV"
+    },
+    {
+      "ordinal": 5,
+      "file": "source/ch05.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER V"
+    },
+    {
+      "ordinal": 6,
+      "file": "source/ch06.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER VI"
+    },
+    {
+      "ordinal": 7,
+      "file": "source/ch07.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER VII"
+    },
+    {
+      "ordinal": 8,
+      "file": "source/ch08.txt",
+      "label": "Part 1: A VOYAGE TO LILLIPUT — CHAPTER VIII"
+    },
+    {
+      "ordinal": 9,
+      "file": "source/ch09.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER I"
+    },
+    {
+      "ordinal": 10,
+      "file": "source/ch10.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER II"
+    },
+    {
+      "ordinal": 11,
+      "file": "source/ch11.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER III"
+    },
+    {
+      "ordinal": 12,
+      "file": "source/ch12.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER IV"
+    },
+    {
+      "ordinal": 13,
+      "file": "source/ch13.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER V"
+    },
+    {
+      "ordinal": 14,
+      "file": "source/ch14.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER VI"
+    },
+    {
+      "ordinal": 15,
+      "file": "source/ch15.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER VII"
+    },
+    {
+      "ordinal": 16,
+      "file": "source/ch16.txt",
+      "label": "Part 2: A VOYAGE TO BROBDINGNAG — CHAPTER VIII"
+    },
+    {
+      "ordinal": 17,
+      "file": "source/ch17.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER I"
+    },
+    {
+      "ordinal": 18,
+      "file": "source/ch18.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER II"
+    },
+    {
+      "ordinal": 19,
+      "file": "source/ch19.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER III"
+    },
+    {
+      "ordinal": 20,
+      "file": "source/ch20.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER IV"
+    },
+    {
+      "ordinal": 21,
+      "file": "source/ch21.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER V"
+    },
+    {
+      "ordinal": 22,
+      "file": "source/ch22.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER VI"
+    },
+    {
+      "ordinal": 23,
+      "file": "source/ch23.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER VII"
+    },
+    {
+      "ordinal": 24,
+      "file": "source/ch24.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER VIII"
+    },
+    {
+      "ordinal": 25,
+      "file": "source/ch25.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER IX"
+    },
+    {
+      "ordinal": 26,
+      "file": "source/ch26.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER X"
+    },
+    {
+      "ordinal": 27,
+      "file": "source/ch27.txt",
+      "label": "Part 3: A VOYAGE TO LAPUTA, BALNIBARBI, GLUBBDUBDRIB, LUGGNAGG AND JAPAN — CHAPTER XI"
+    },
+    {
+      "ordinal": 28,
+      "file": "source/ch28.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER I"
+    },
+    {
+      "ordinal": 29,
+      "file": "source/ch29.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER II"
+    },
+    {
+      "ordinal": 30,
+      "file": "source/ch30.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER III"
+    },
+    {
+      "ordinal": 31,
+      "file": "source/ch31.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER IV"
+    },
+    {
+      "ordinal": 32,
+      "file": "source/ch32.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER V"
+    },
+    {
+      "ordinal": 33,
+      "file": "source/ch33.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER VI"
+    },
+    {
+      "ordinal": 34,
+      "file": "source/ch34.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER VII"
+    },
+    {
+      "ordinal": 35,
+      "file": "source/ch35.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER VIII"
+    },
+    {
+      "ordinal": 36,
+      "file": "source/ch36.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER IX"
+    },
+    {
+      "ordinal": 37,
+      "file": "source/ch37.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER X"
+    },
+    {
+      "ordinal": 38,
+      "file": "source/ch38.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER XI"
+    },
+    {
+      "ordinal": 39,
+      "file": "source/ch39.txt",
+      "label": "Part 4: A VOYAGE TO THE COUNTRY OF THE HOUYHNHNMS — CHAPTER XII"
+    }
+  ]
+}

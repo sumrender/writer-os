@@ -1,0 +1,187 @@
+{
+  "book": "tom-sawyer",
+  "title": "The Adventures of Tom Sawyer",
+  "source": "Project Gutenberg #74",
+  "chapters": [
+    {
+      "ordinal": 1,
+      "file": "source/ch01.txt",
+      "label": "CHAPTER I"
+    },
+    {
+      "ordinal": 2,
+      "file": "source/ch02.txt",
+      "label": "CHAPTER II"
+    },
+    {
+      "ordinal": 3,
+      "file": "source/ch03.txt",
+      "label": "CHAPTER III"
+    },
+    {
+      "ordinal": 4,
+      "file": "source/ch04.txt",
+      "label": "CHAPTER IV"
+    },
+    {
+      "ordinal": 5,
+      "file": "source/ch05.txt",
+      "label": "CHAPTER V"
+    },
+    {
+      "ordinal": 6,
+      "file": "source/ch06.txt",
+      "label": "CHAPTER VI"
+    },
+    {
+      "ordinal": 7,
+      "file": "source/ch07.txt",
+      "label": "CHAPTER VII"
+    },
+    {
+      "ordinal": 8,
+      "file": "source/ch08.txt",
+      "label": "CHAPTER VIII"
+    },
+    {
+      "ordinal": 9,
+      "file": "source/ch09.txt",
+      "label": "CHAPTER IX"
+    },
+    {
+      "ordinal": 10,
+      "file": "source/ch10.txt",
+      "label": "CHAPTER X"
+    },
+    {
+      "ordinal": 11,
+      "file": "source/ch11.txt",
+      "label": "CHAPTER XI"
+    },
+    {
+      "ordinal": 12,
+      "file": "source/ch12.txt",
+      "label": "CHAPTER XII"
+    },
+    {
+      "ordinal": 13,
+      "file": "source/ch13.txt",
+      "label": "CHAPTER XIII"
+    },
+    {
+      "ordinal": 14,
+      "file": "source/ch14.txt",
+      "label": "CHAPTER XIV"
+    },
+    {
+      "ordinal": 15,
+      "file": "source/ch15.txt",
+      "label": "CHAPTER XV"
+    },
+    {
+      "ordinal": 16,
+      "file": "source/ch16.txt",
+      "label": "CHAPTER XVI"
+    },
+    {
+      "ordinal": 17,
+      "file": "source/ch17.txt",
+      "label": "CHAPTER XVII"
+    },
+    {
+      "ordinal": 18,
+      "file": "source/ch18.txt",
+      "label": "CHAPTER XVIII"
+    },
+    {
+      "ordinal": 19,
+      "file": "source/ch19.txt",
+      "label": "CHAPTER XIX"
+    },
+    {
+      "ordinal": 20,
+      "file": "source/ch20.txt",
+      "label": "CHAPTER XX"
+    },
+    {
+      "ordinal": 21,
+      "file": "source/ch21.txt",
+      "label": "CHAPTER XXI"
+    },
+    {
+      "ordinal": 22,
+      "file": "source/ch22.txt",
+      "label": "CHAPTER XXII"
+    },
+    {
+      "ordinal": 23,
+      "file": "source/ch23.txt",
+      "label": "CHAPTER XXIII"
+    },
+    {
+      "ordinal": 24,
+      "file": "source/ch24.txt",
+      "label": "CHAPTER XXIV"
+    },
+    {
+      "ordinal": 25,
+      "file": "source/ch25.txt",
+      "label": "CHAPTER XXV"
+    },
+    {
+      "ordinal": 26,
+      "file": "source/ch26.txt",
+      "label": "CHAPTER XXVI"
+    },
+    {
+      "ordinal": 27,
+      "file": "source/ch27.txt",
+      "label": "CHAPTER XXVII"
+    },
+    {
+      "ordinal": 28,
+      "file": "source/ch28.txt",
+      "label": "CHAPTER XXVIII"
+    },
+    {
+      "ordinal": 29,
+      "file": "source/ch29.txt",
+      "label": "CHAPTER XXIX"
+    },
+    {
+      "ordinal": 30,
+      "file": "source/ch30.txt",
+      "label": "CHAPTER XXX"
+    },
+    {
+      "ordinal": 31,
+      "file": "source/ch31.txt",
+      "label": "CHAPTER XXXI"
+    },
+    {
+      "ordinal": 32,
+      "file": "source/ch32.txt",
+      "label": "CHAPTER XXXII"
+    },
+    {
+      "ordinal": 33,
+      "file": "source/ch33.txt",
+      "label": "CHAPTER XXXIII"
+    },
+    {
+      "ordinal": 34,
+      "file": "source/ch34.txt",
+      "label": "CHAPTER XXXIV"
+    },
+    {
+      "ordinal": 35,
+      "file": "source/ch35.txt",
+      "label": "CHAPTER XXXV"
+    },
+    {
+      "ordinal": 36,
+      "file": "source/ch36.txt",
+      "label": "CONCLUSION"
+    }
+  ]
+}
