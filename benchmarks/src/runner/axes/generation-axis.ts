@@ -1,10 +1,10 @@
-import type { BeatSet } from "./lib/beats.js";
-import type { Check, Extract, Generate } from "./lib/pipeline.js";
-import type { EquivalenceChecker } from "./lib/judge.js";
-import type { ExtractableChapter } from "./lib/manifest.js";
-import { runExtraction } from "./lib/extraction-run.js";
-import { runGenerationCases, type GenerationCaseResult } from "./lib/generation-run.js";
-import { RUNS_PER_BOOK, statsOf, type Stats } from "./lib/metrics.js";
+import type { BeatSet } from "../../lib/beats.js";
+import type { Check, Extract, Generate } from "../../lib/pipeline.js";
+import type { EquivalenceChecker } from "../../lib/judge.js";
+import type { ExtractableChapter } from "../../lib/manifest.js";
+import { runExtraction } from "../../lib/extraction-run.js";
+import { runGenerationCases, type GenerationCaseResult } from "../../lib/generation-run.js";
+import { RUNS_PER_BOOK, statsOf, type Stats } from "../../lib/metrics.js";
 
 /**
  * Generation-axis run protocol (docs/TESTING.md §8, §9): `runs` sequential

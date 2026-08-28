@@ -6,12 +6,31 @@ Dev-facing evaluation suite: runs fixture books through Writer OS pipelines and 
 
 ```
 benchmarks/
-  src/            runner CLI, manifest validation (tests beside modules)
+  src/            runner layer (entry, engine, config, chain, axes) + lib/ seams
   scripts/        build-books.ts — regenerates fixtures from Project Gutenberg
   books/          committed fixture books (source chapters + manifest.json)
   dist/           compiled CLI (gitignored)
   results/        run output — gitignored, never committed
 ```
+
+`src/runner/` — one responsibility per file:
+
+- `cli.ts` — process entry: loads `.env`; no args → runs the configured chain, args → CLI engine
+- `config.ts` — `BenchmarkConfig` + `DEFAULT_BENCHMARK_CONFIG` (the file you edit)
+- `chain.ts` — `runBenchmark`: pre-flight validation, book×axis loop, run logs + ledger, summary
+- `engine.ts` / `usage.ts` — `runCli`: argv → command dispatch, help text
+- `flags.ts` — argv parsing and per-flag validation
+- `validation.ts` — fixture loading/validation reporting, `validate` command
+- `ops.ts` — pipeline/judge selection wiring (live Agnes vs fakes) + cache wrapping
+- `commands.ts` — the `run`/`list` commands and the three axis end-to-end commands
+- `axes/` — the extraction/checker/generation run protocols; `report.ts` — their formatters
+- `index.ts` — public API barrel
+
+Two ways to launch (same plumbing, same exit codes):
+
+- **Configured chain**: edit `DEFAULT_BENCHMARK_CONFIG` in `src/runner/config.ts`, then `pnpm start`.
+- **Single ad-hoc command**: `node dist/runner/cli.js run --book tom-sawyer --axis extraction …`.
+
 
 Fixture-side machinery beside `src/lib/`:
 
@@ -38,13 +57,24 @@ pnpm install
 pnpm build                 # compile CLI to dist/
 pnpm typecheck             # strict-mode TS across src/ + scripts/
 pnpm test                  # vitest
+pnpm start                 # build + run the configured benchmark chain (see below)
 pnpm books:build           # re-download + re-split fixture books (network)
 
-node dist/cli.js validate --book tom-sawyer
-node dist/cli.js run --book mini-book --axis extraction
-node dist/cli.js run --book gullivers-travels --axis extraction --format json
-node dist/cli.js list
+node dist/runner/cli.js validate --book tom-sawyer
+node dist/runner/cli.js run --book mini-book --axis extraction
+node dist/runner/cli.js run --book gullivers-travels --axis extraction --format json
+node dist/runner/cli.js list
 ```
+
+## Configured chain (config runner)
+
+For whole-chain runs without hand-typing flags, edit `DEFAULT_BENCHMARK_CONFIG` in `src/runner/config.ts` — books, runs per axis, pipeline (`live`/`fake`), judge (`stub`/`live`), axes, gates (inline floors or a JSON gates file), cache on/off + paths, format, log level, and whether run reports land in `results/runs/` — then run everything with one command:
+
+```sh
+pnpm start                 # builds the CLI, then executes the configured chain
+```
+
+Each `books` entry can override `axes`, `runs`, `pipeline`, `judge`, and `gates` per book. Pre-flight fixture validation runs first (configurable), per-run reports + a START/END ledger land under `results/runs/` (same convention as `scripts/run-all-books.sh`), and the process exits with the first failing run's exit code. Programmatic callers can `import { runBenchmark }` from `src/runner/index.js` with their own `BenchmarkConfig` and io sink.
 
 `run --axis extraction` options:
 
@@ -92,7 +122,7 @@ To see validation fail on a deliberately corrupted fixture:
 ```sh
 cp -R books/tom-sawyer /tmp/tom-sawyer-broken
 rm /tmp/tom-sawyer-broken/source/ch05.txt
-node dist/cli.js validate --book tom-sawyer --books-root /tmp   # exit 1, precise error
+node dist/runner/cli.js validate --book tom-sawyer --books-root /tmp   # exit 1, precise error
 ```
 
 The vendor client (`openai`, pointed at Agnes AI's OpenAI-compatible endpoint per ADR-0004) backs the live judge; the equivalence-only contract it serves is specified in ADR-0005.

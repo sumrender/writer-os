@@ -10,8 +10,8 @@ import {
   EXIT_VALIDATION_FAILED,
   runCli,
   type CliIo,
-} from "./runner.js";
-import { chapterFileName } from "./lib/chapter-file.js";
+} from "./index.js";
+import { chapterFileName } from "../lib/chapter-file.js";
 
 let root: string;
 
@@ -23,7 +23,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const REPO_BOOKS = join(dirname(fileURLToPath(import.meta.url)), "..", "books");
+const REPO_BOOKS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "books");
 
 function writeBook(id: string, ordinals: number[]): string {
   const bookDir = join(root, id);

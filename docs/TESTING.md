@@ -251,16 +251,16 @@ All commands run from `benchmarks/`. Default protocol is **3 runs**, **live pipe
 
 ```sh
 # validate fixtures without any model calls
-node dist/cli.js list
-node dist/cli.js validate --book tom-sawyer
+node dist/runner/cli.js list
+node dist/runner/cli.js validate --book tom-sawyer
 
 # single axis, single book (the core command)
-node dist/cli.js run --book tom-sawyer  --axis extraction --judge live
-node dist/cli.js run --book gullivers-travels --axis extraction --judge live
-node dist/cli.js run --book tom-sawyer  --axis checker    --judge live
-node dist/cli.js run --book gullivers-travels --axis checker    --judge live
-node dist/cli.js run --book tom-sawyer  --axis generation --judge live
-node dist/cli.js run --book gullivers-travels --axis generation --judge live
+node dist/runner/cli.js run --book tom-sawyer  --axis extraction --judge live
+node dist/runner/cli.js run --book gullivers-travels --axis extraction --judge live
+node dist/runner/cli.js run --book tom-sawyer  --axis checker    --judge live
+node dist/runner/cli.js run --book gullivers-travels --axis checker    --judge live
+node dist/runner/cli.js run --book tom-sawyer  --axis generation --judge live
+node dist/runner/cli.js run --book gullivers-travels --axis generation --judge live
 ```
 
 Useful flags:

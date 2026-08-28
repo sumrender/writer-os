@@ -1,12 +1,12 @@
-import { ENTITY_KINDS, type EntityKind } from "./lib/bible.js";
-import type { AssertionSet } from "./lib/assertions.js";
-import type { ExtractableChapter } from "./lib/manifest.js";
-import type { Extract } from "./lib/pipeline.js";
-import type { Judge } from "./lib/judge.js";
-import { runExtraction } from "./lib/extraction-run.js";
-import { gradeAssertionSet, type GradedAssertion } from "./lib/grader.js";
-import { bookSourceText, sweepUnmatchedFacts } from "./lib/sweep.js";
-import { silentLogger, type Logger } from "./lib/logger.js";
+import { ENTITY_KINDS, type EntityKind } from "../../lib/bible.js";
+import type { AssertionSet } from "../../lib/assertions.js";
+import type { ExtractableChapter } from "../../lib/manifest.js";
+import type { Extract } from "../../lib/pipeline.js";
+import type { Judge } from "../../lib/judge.js";
+import { runExtraction } from "../../lib/extraction-run.js";
+import { gradeAssertionSet, type GradedAssertion } from "../../lib/grader.js";
+import { bookSourceText, sweepUnmatchedFacts } from "../../lib/sweep.js";
+import { silentLogger, type Logger } from "../../lib/logger.js";
 import {
   globalPrecision,
   kindMetrics,
@@ -15,8 +15,8 @@ import {
   type KindCounts,
   type KindMetrics,
   type Stats,
-} from "./lib/metrics.js";
-import { evaluateGates, type GateConfig, type GateEvaluation } from "./lib/gates.js";
+} from "../../lib/metrics.js";
+import { evaluateGates, type GateConfig, type GateEvaluation } from "../../lib/gates.js";
 
 /**
  * Extraction-axis run protocol (docs/TESTING.md §9): `runs` sequential

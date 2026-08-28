@@ -1,6 +1,6 @@
-import type { ExtractionAxisReport, KindReport } from "./extraction-axis.js";
-import type { CheckerAxisReport } from "./checker-axis.js";
-import type { GenerationAxisReport } from "./generation-axis.js";
+import type { ExtractionAxisReport, KindReport } from "./axes/extraction-axis.js";
+import type { CheckerAxisReport } from "./axes/checker-axis.js";
+import type { GenerationAxisReport } from "./axes/generation-axis.js";
 
 /**
  * Presentation of axis reports (docs/TESTING.md §9): everything a run

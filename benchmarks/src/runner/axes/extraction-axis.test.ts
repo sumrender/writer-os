@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadAssertionSet } from "./lib/assertion-file.js";
-import { validateBook } from "./lib/manifest.js";
-import { fakeExtract } from "./lib/fakes.js";
-import type { Extract } from "./lib/pipeline.js";
-import { createStubJudge } from "./lib/stub-judge.js";
-import { CachingJudge } from "./lib/cached-judge.js";
-import { MemoryVerdictCache } from "./lib/verdict-cache.js";
-import { DEFAULT_GATES } from "./lib/gates.js";
+import { loadAssertionSet } from "../../lib/assertion-file.js";
+import { validateBook } from "../../lib/manifest.js";
+import { fakeExtract } from "../../lib/fakes.js";
+import type { Extract } from "../../lib/pipeline.js";
+import { createStubJudge } from "../../lib/stub-judge.js";
+import { CachingJudge } from "../../lib/cached-judge.js";
+import { MemoryVerdictCache } from "../../lib/verdict-cache.js";
+import { DEFAULT_GATES } from "../../lib/gates.js";
 import { runExtractionAxis } from "./extraction-axis.js";
-import { formatJsonReport, formatTextReport } from "./report.js";
+import { formatJsonReport, formatTextReport } from "../report.js";
 
-const booksRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "books");
+const booksRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "books");
 
 async function loadMiniBook() {
   const book = validateBook(join(booksRoot, "mini-book"));

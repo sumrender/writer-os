@@ -23,7 +23,7 @@ run_one() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   log="$RUNS_DIR/${stamp}-${book}-${axis}.txt"
   echo "START $(date -u +%FT%TZ) book=${book} axis=${axis} cache=${CACHE} log=${log}" >> "$RUNS_DIR/index.txt"
-  node dist/cli.js run --book "$book" --axis "$axis" --judge live --cache "$CACHE" > "$log" 2>&1
+  node dist/runner/cli.js run --book "$book" --axis "$axis" --judge live --cache "$CACHE" > "$log" 2>&1
   status=$?
   echo "END   $(date -u +%FT%TZ) book=${book} axis=${axis} exit=${status} log=${log}" >> "$RUNS_DIR/index.txt"
 }

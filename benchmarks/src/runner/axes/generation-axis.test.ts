@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateBook } from "./lib/manifest.js";
-import { loadBeatSet } from "./lib/beat-file.js";
-import { fakeCheck, fakeExtract, fakeGenerate } from "./lib/fakes.js";
-import { createStubJudge } from "./lib/stub-judge.js";
-import type { Check, Generate } from "./lib/pipeline.js";
+import { validateBook } from "../../lib/manifest.js";
+import { loadBeatSet } from "../../lib/beat-file.js";
+import { fakeCheck, fakeExtract, fakeGenerate } from "../../lib/fakes.js";
+import { createStubJudge } from "../../lib/stub-judge.js";
+import type { Check, Generate } from "../../lib/pipeline.js";
 import { runGenerationAxis } from "./generation-axis.js";
-import { formatGenerationJsonReport, formatGenerationTextReport } from "./report.js";
+import { formatGenerationJsonReport, formatGenerationTextReport } from "../report.js";
 
-const booksRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "books");
+const booksRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "books");
 
 async function loadMiniBook() {
   const book = validateBook(join(booksRoot, "mini-book"));

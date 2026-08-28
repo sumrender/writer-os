@@ -7,13 +7,14 @@
     "node": ">=22"
   },
   "bin": {
-    "bench": "./dist/cli.js"
+    "bench": "./dist/runner/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "start": "pnpm build && node dist/runner/cli.js",
     "books:build": "node scripts/build-books.ts"
   },
   "dependencies": {

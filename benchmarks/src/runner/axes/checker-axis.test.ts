@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateBook } from "./lib/manifest.js";
-import { loadAssertionSet } from "./lib/assertion-file.js";
-import { loadPerturbationSet } from "./lib/perturbation-file.js";
-import { fakeCheck, fakeExtract } from "./lib/fakes.js";
-import type { Check } from "./lib/pipeline.js";
+import { validateBook } from "../../lib/manifest.js";
+import { loadAssertionSet } from "../../lib/assertion-file.js";
+import { loadPerturbationSet } from "../../lib/perturbation-file.js";
+import { fakeCheck, fakeExtract } from "../../lib/fakes.js";
+import type { Check } from "../../lib/pipeline.js";
 import { runCheckerAxis } from "./checker-axis.js";
-import { formatCheckerJsonReport, formatCheckerTextReport } from "./report.js";
+import { formatCheckerJsonReport, formatCheckerTextReport } from "../report.js";
 
-const booksRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "books");
+const booksRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "books");
 
 async function loadMiniBook() {
   const book = validateBook(join(booksRoot, "mini-book"));

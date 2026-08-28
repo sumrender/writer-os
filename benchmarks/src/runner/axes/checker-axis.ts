@@ -1,9 +1,9 @@
-import type { Check, Extract } from "./lib/pipeline.js";
-import type { PerturbationCase } from "./lib/perturbation-file.js";
-import type { ExtractableChapter } from "./lib/manifest.js";
-import { runExtraction } from "./lib/extraction-run.js";
-import { runCheckerCases } from "./lib/checker-run.js";
-import { RUNS_PER_BOOK, statsOf, type Stats } from "./lib/metrics.js";
+import type { Check, Extract } from "../../lib/pipeline.js";
+import type { PerturbationCase } from "../../lib/perturbation-file.js";
+import type { ExtractableChapter } from "../../lib/manifest.js";
+import { runExtraction } from "../../lib/extraction-run.js";
+import { runCheckerCases } from "../../lib/checker-run.js";
+import { RUNS_PER_BOOK, statsOf, type Stats } from "../../lib/metrics.js";
 
 /**
  * Checker-axis run protocol (docs/TESTING.md §7, §9): `runs` sequential
