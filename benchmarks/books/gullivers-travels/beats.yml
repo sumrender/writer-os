@@ -1,0 +1,36 @@
+book: gullivers-travels
+# Beat declarations for the generation-fidelity axis (docs/TESTING.md §8).
+# One declared beat chapter per voyage part, exercising must_include /
+# must_not_include over capture-and-release, court politics, and satire pivots.
+chapters:
+  - ordinal: 5
+    beats:
+      must_include:
+        - "Gulliver wades across the channel and tows away the Blefuscu fleet, averting invasion"
+        - "he extinguishes the fire in the empress's apartment by undignified means"
+      must_not_include:
+        - "the Emperor of Lilliput orders Gulliver to destroy Blefuscu entirely and Gulliver refuses only reluctantly after slaughter begins"
+
+  - ordinal: 11
+    beats:
+      must_include:
+        - "the queen purchases Gulliver from the farmer and presents him at court"
+        - "Glumdalclitch remains Gulliver's devoted keeper at the Brobdingnagian court"
+      must_not_include:
+        - "Gulliver wins his freedom through the rope-dancing trials alongside Brobdingnagian ministers"
+
+  - ordinal: 21
+    beats:
+      must_include:
+        - "projectors at the Lagado academy attempt absurd research such as extracting sunbeams from cucumbers"
+        - "a proposal to abolish words in favor of carrying physical objects survives among the schemes"
+      must_not_include:
+        - "any Lagado projector succeeds in producing a genuinely useful invention that Gulliver admires"
+
+  - ordinal: 38
+    beats:
+      must_include:
+        - "Pedro de Mendez treats the shipwrecked Gulliver kindly despite his misanthropic ravings"
+        - "Gulliver arrives home unable to bear human company, finding comfort only among horses"
+      must_not_include:
+        - "the Houyhnhnms give Gulliver leave to settle permanently on their island"

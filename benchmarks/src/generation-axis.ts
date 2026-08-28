@@ -37,6 +37,14 @@ export interface GenerationChapterReport {
   readonly factualFlags: Stats;
   /** Fraction of runs the chapter passed cleanly (1 = pass, 0 = otherwise). */
   readonly verdict: Stats;
+  /**
+   * Deduped failure evidence across runs, first-seen order — without it a
+   * failing chapter is only a rate, not a diagnosis. Missed/violated beats
+   * carry their declaration text; assembly failures carry flag messages.
+   */
+  readonly missedBeats: readonly string[];
+  readonly violatedBeats: readonly string[];
+  readonly flagMessages: readonly string[];
 }
 
 export interface GenerationAxisReport {
@@ -68,6 +76,15 @@ export async function runGenerationAxis(input: GenerationAxisInput): Promise<Gen
   const observationsByOrdinal = new Map<number, PerOrdinalObservations[]>(
     input.beats.chapters.map((chapter) => [chapter.ordinal, []]),
   );
+  const missedByOrdinal = new Map<number, string[]>(
+    input.beats.chapters.map((chapter) => [chapter.ordinal, []]),
+  );
+  const violatedByOrdinal = new Map<number, string[]>(
+    input.beats.chapters.map((chapter) => [chapter.ordinal, []]),
+  );
+  const flagsByOrdinal = new Map<number, string[]>(
+    input.beats.chapters.map((chapter) => [chapter.ordinal, []]),
+  );
 
   for (let run = 0; run < runs; run++) {
     const snapshots = await runExtraction(input.chapters, input.extract);
@@ -87,6 +104,13 @@ export async function runGenerationAxis(input: GenerationAxisInput): Promise<Gen
         factualFlags: result.factualFlags.length,
         pass: verdict === "pass" ? 1 : 0,
       });
+      // Failure evidence accumulates across runs regardless of the verdict
+      // mix, so a single-run lapse still shows its cause in the report.
+      missedByOrdinal.get(result.ordinal)?.push(...result.missingBeats);
+      violatedByOrdinal.get(result.ordinal)?.push(...result.violatedBeats);
+      flagsByOrdinal
+        .get(result.ordinal)
+        ?.push(...result.factualFlags.map((flag) => `${flag.kind}: ${flag.message}`));
     }
   }
 
@@ -98,6 +122,9 @@ export async function runGenerationAxis(input: GenerationAxisInput): Promise<Gen
       assemblyFailureRate: statsOf(observed.map((o) => o.assemblyFailure)),
       factualFlags: statsOf(observed.map((o) => o.factualFlags)),
       verdict: statsOf(observed.map((o) => o.pass)),
+      missedBeats: [...new Set(missedByOrdinal.get(chapter.ordinal) ?? [])],
+      violatedBeats: [...new Set(violatedByOrdinal.get(chapter.ordinal) ?? [])],
+      flagMessages: [...new Set(flagsByOrdinal.get(chapter.ordinal) ?? [])],
     };
   });
 

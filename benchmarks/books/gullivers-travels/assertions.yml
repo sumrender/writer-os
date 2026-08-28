@@ -1,0 +1,555 @@
+book: gullivers-travels
+# Hand-authored ground truth for Gulliver's Travels (Project Gutenberg #829,
+# divided into 39 chapter ordinals mapping Parts I-IV). Every `must` cites
+# chapters establishing the fact; every `must_not` guards a plausible
+# extraction confusion. Evidence ordinals were verified against
+# benchmarks/books/gullivers-travels/source/.
+assertions:
+  # --- character ---
+  - id: char-gulliver
+    kind: character
+    expect: must
+    name: Lemuel Gulliver
+    evidence: [1]
+
+  - id: char-mary-burton
+    kind: character
+    expect: must
+    name: Mary Burton
+    evidence: [1]
+
+  - id: char-emperor-lilliput
+    kind: character
+    expect: must
+    name: Emperor of Lilliput
+    evidence: [1]
+
+  - id: char-reldresal
+    kind: character
+    expect: must
+    name: Reldresal
+    evidence: [4]
+
+  - id: char-flimnap
+    kind: character
+    expect: must
+    name: Flimnap
+    evidence: [3]
+
+  - id: char-glumdalclitch
+    kind: character
+    expect: must
+    name: Glumdalclitch
+    evidence: [10]
+
+  - id: char-king-brobdingnag
+    kind: character
+    expect: must
+    name: King of Brobdingnag
+    evidence: [11]
+
+  - id: char-queen-brobdingnag
+    kind: character
+    expect: must
+    name: Queen of Brobdingnag
+    evidence: [11]
+
+  - id: char-wilcocks
+    kind: character
+    expect: must
+    name: Thomas Wilcocks
+    evidence: [16]
+
+  - id: char-mendez
+    kind: character
+    expect: must
+    name: Pedro de Mendez
+    evidence: [38]
+
+  # --- appearance ---
+  - id: app-gulliver-bound
+    kind: appearance
+    expect: must
+    character: Lemuel Gulliver
+    attribute: condition upon landing in Lilliput
+    contains: bound
+    evidence: [1]
+
+  - id: app-gulliver-spectacles
+    kind: appearance
+    expect: must
+    character: Lemuel Gulliver
+    attribute: carried eyewear
+    contains: spectacles
+    evidence: [2, 5]
+
+  - id: app-glumda-nurse-role
+    kind: appearance
+    expect: must
+    character: Glumdalclitch
+    attribute: constant companion role
+    contains: nurse
+    evidence: [10]
+
+  - id: app-yahoo-filth
+    kind: appearance
+    expect: must
+    character: Yahoos
+    attribute: bodily condition
+    contains: filthy
+    evidence: [28]
+
+  - id: app-lilliputian-scale
+    kind: appearance
+    expect: must
+    character: Emperor of Lilliput
+    attribute: stature relative to Gulliver
+    contains: taller than
+    evidence: [1]
+    note: The Lilliputian court stands well below the prone traveler, whose
+      knee rises taller than the assembly.
+
+  - id: app-not-brobdingnag-scale-for-lilliput
+    kind: appearance
+    expect: must_not
+    character: Emperor of Lilliput
+    attribute: stature relative to Gulliver
+    contains: towered
+    evidence: [1]
+    note: Scale confusion between Lilliput and Brobdingnag is the classic
+      cross-part mixing error this probe guards against.
+
+  # --- relationship ---
+  - id: rel-gulliver-mary-wife
+    kind: relationship
+    expect: must
+    from: Lemuel Gulliver
+    to: Mary Burton
+    type: wife
+    evidence: [1]
+
+  - id: rel-mary-gulliver-husband
+    kind: relationship
+    expect: must
+    from: Mary Burton
+    to: Lemuel Gulliver
+    type: husband
+    evidence: [1]
+
+  - id: rel-empress-emperor-spouse
+    kind: relationship
+    expect: must
+    from: Empress of Lilliput
+    to: Emperor of Lilliput
+    type: husband
+    evidence: [5]
+
+  - id: rel-emperor-lilliput-sovereign
+    kind: relationship
+    expect: must
+    from: Emperor of Lilliput
+    to: Lilliput
+    type: sovereign of
+    evidence: [4]
+
+  - id: rel-flimnap-treasurer
+    kind: relationship
+    expect: must
+    from: Flimnap
+    to: Emperor of Lilliput
+    type: high treasurer of
+    evidence: [3, 6]
+
+  - id: rel-reldresal-secretary
+    kind: relationship
+    expect: must
+    from: Reldresal
+    to: Emperor of Lilliput
+    type: principal private secretary of
+    evidence: [4]
+
+  - id: rel-farmer-glumda-father
+    kind: relationship
+    expect: must
+    from: the Brobdingnagian farmer
+    to: Glumdalclitch
+    type: father of
+    evidence: [10]
+
+  - id: rel-glumda-nurse
+    kind: relationship
+    expect: must
+    from: Glumdalclitch
+    to: Lemuel Gulliver
+    type: little nurse of
+    evidence: [10]
+
+  - id: rel-gulliver-queen-entertainer
+    kind: relationship
+    expect: must
+    from: Lemuel Gulliver
+    to: Queen of Brobdingnag
+    type: court favorite of
+    evidence: [11]
+
+  - id: rel-wilcocks-rescuer
+    kind: relationship
+    expect: must
+    from: Thomas Wilcocks
+    to: Lemuel Gulliver
+    type: rescuer of
+    evidence: [16]
+
+  - id: rel-mendez-rescuer
+    kind: relationship
+    expect: must
+    from: Pedro de Mendez
+    to: Lemuel Gulliver
+    type: rescuer of
+    evidence: [38]
+
+  - id: rel-master-houyhnhnm-governor
+    kind: relationship
+    expect: must
+    from: the master Houyhnhnm
+    to: Lemuel Gulliver
+    type: master of
+    evidence: [28]
+
+  - id: rel-gulliver-yahoo-not-species
+    kind: relationship
+    expect: must_not
+    from: Lemuel Gulliver
+    to: Yahoos
+    type: proud member of the same species as
+    evidence: [28]
+    note: The fourth-part satire turns on Gulliver rejecting any kinship with
+      Yahoos; extracting solidarity flips the polemic.
+
+  - id: rel-empress-not-ally-after-fire
+    kind: relationship
+    expect: must_not
+    from: Empress of Lilliput
+    to: Lemuel Gulliver
+    type: grateful benefactor of
+    evidence: [5]
+    note: He extinguished the palace fire by undignified means and the empress
+      forever detests him; gratitude is the inverted reading.
+
+  # --- item ---
+  - id: item-scimitar-surrendered
+    kind: item
+    expect: must
+    item: Gulliver's scimitar
+    holder: Emperor of Lilliput
+    evidence: [2]
+
+  - id: item-pistols-surrendered
+    kind: item
+    expect: must
+    item: Gulliver's pocket pistols
+    holder: Emperor of Lilliput
+    evidence: [2]
+
+  - id: item-watch-secretly-kept
+    kind: item
+    expect: must
+    item: Gulliver's silver watch
+    holder: Lemuel Gulliver
+    as_of: 2
+    evidence: [2]
+    note: Inventoried yet withheld; he surrendered the scimitar and pistols
+      while the watch stayed hidden in a private pocket.
+
+  - id: item-fleet-towed
+    kind: item
+    expect: must
+    item: the Blefuscu men-of-war fleet
+    holder: Emperor of Lilliput
+    as_of: 5
+    evidence: [5]
+    note: Holder changes hands by stratagem; graded against bible state as of
+      the capture ordinal, mirroring the item-lifecycle case.
+
+  - id: item-lodestone-laputa
+    kind: item
+    expect: must
+    item: the lodestone raising the flying island
+    holder: the astronomers of Laputa
+    evidence: [17, 19]
+
+  - id: item-beard-comb
+    kind: item
+    expect: must
+    item: a comb made from strands of the king's beard
+    holder: Lemuel Gulliver
+    as_of: 16
+    evidence: [14, 16]
+
+  - id: item-fleet-never-returned
+    kind: item
+    expect: must_not
+    item: the Blefuscu men-of-war fleet
+    holder: Blefuscu
+    as_of: 7
+    evidence: [5]
+    note: The captured fleet is never handed back during Part I; probes
+      over-eager restoration of pre-conflict state.
+
+  # --- thread ---
+  - id: thread-lilliput-imprisonment
+    kind: thread
+    expect: must
+    thread: Gulliver's captivity in Lilliput
+    status: resolved
+    as_of: 3
+    evidence: [1, 2, 3]
+
+  - id: thread-egg-war
+    kind: thread
+    expect: must
+    thread: the war between Lilliput and Blefuscu over egg-breaking
+    status: resolved
+    as_of: 5
+    evidence: [4, 5]
+
+  - id: thread-empress-grudge
+    kind: thread
+    expect: must
+    thread: the empress's indignation over the fire episode
+    status: dormant
+    as_of: 7
+    evidence: [5, 7]
+
+  - id: thread-struldbrug-lesson
+    kind: thread
+    expect: must
+    thread: Gulliver's infatuation with immortality at Luggnagg
+    status: resolved
+    as_of: 27
+    evidence: [26, 27]
+
+  - id: thread-houyhnhnm-longing
+    kind: thread
+    expect: must
+    thread: Gulliver's wish to remain forever among the Houyhnhnms
+    status: resolved
+    as_of: 38
+    evidence: [29, 38]
+
+  # --- world_rule ---
+  - id: rule-floating-island-physics
+    kind: world_rule
+    expect: must
+    topic: the flying island rides above Balnibarbi on a magnetized lodestone
+    evidence: [17, 19]
+
+  - id: rule-egg-edict
+    kind: world_rule
+    expect: must
+    topic: Lilliputian law commanding subjects to break eggs at the smaller end
+    evidence: [4]
+
+  - id: rule-no-yahoo-government
+    kind: world_rule
+    expect: must_not
+    topic: Yahoos maintaining assemblies, laws, or rational government of their own
+    note: Yahoos are beastly precisely because they lack reason; an extracted
+      Yahoo polity is a humanizing fabrication.
+
+  # --- timeline ---
+  - id: order-arrival-before-fleet-capture
+    kind: timeline
+    expect: must
+    sequence: ["shipwreck ashore in Lilliput", "capture of the Blefuscu fleet"]
+    evidence: [1, 5]
+
+  - id: order-articles-before-nardac
+    kind: timeline
+    expect: must
+    sequence: ["articles of liberty signed and sworn", "the title of Nardac conferred"]
+    evidence: [3, 5]
+
+  - id: order-brobdingnag-before-laputa
+    kind: timeline
+    expect: must
+    sequence: ["rescue by the English merchantman out of Brobdingnag", "falling in with the pirates and reaching Laputa"]
+    evidence: [16, 17]
+
+  - id: order-projectors-before-academy
+    kind: timeline
+    expect: must
+    sequence: ["introduction to the flappers at court", "tour of the Lagado academy projectors"]
+    evidence: [18, 21]
+
+  - id: order-yahoo-discovery-before-portugal
+    kind: timeline
+    expect: must
+    sequence: ["meeting the Houyhnhnms and Yahoos", "departure aboard the Portuguese ship"]
+    evidence: [28, 38]
+
+  # --- lexicon ---
+  - id: lex-blefuscu
+    kind: lexicon
+    expect: must
+    term: Blefuscu
+    locked_spelling: true
+    evidence: [4]
+
+  - id: lex-flimnap
+    kind: lexicon
+    expect: must
+    term: Flimnap
+    locked_spelling: true
+    evidence: [3]
+
+  - id: lex-reldresal
+    kind: lexicon
+    expect: must
+    term: Reldresal
+    locked_spelling: true
+    evidence: [4]
+
+  - id: lex-nardac
+    kind: lexicon
+    expect: must
+    term: Nardac
+    locked_spelling: true
+    evidence: [5]
+
+  - id: lex-glumdalclitch
+    kind: lexicon
+    expect: must
+    term: Glumdalclitch
+    locked_spelling: true
+    evidence: [10]
+
+  - id: lex-grildrig
+    kind: lexicon
+    expect: must
+    term: Grildrig
+    locked_spelling: true
+    evidence: [10]
+
+  - id: lex-laputa
+    kind: lexicon
+    expect: must
+    term: Laputa
+    locked_spelling: true
+    evidence: [17]
+
+  - id: lex-struldbrug
+    kind: lexicon
+    expect: must
+    term: struldbrug
+    locked_spelling: true
+    evidence: [26]
+
+  - id: lex-yahoo
+    kind: lexicon
+    expect: must
+    term: Yahoo
+    locked_spelling: true
+    evidence: [28]
+
+  - id: lex-houyhnhnm
+    kind: lexicon
+    expect: must
+    term: Houyhnhnm
+    locked_spelling: true
+    evidence: [28]
+
+  - id: lex-yahoo-plural-drift
+    kind: lexicon
+    expect: must_not
+    term: Yahoooo
+    locked_spelling: false
+    evidence: [28]
+    note: Guards vowel drift; the locked term adds a single o.
+
+  # --- style ---
+  - id: style-narration-person
+    kind: style
+    expect: must
+    field: pov_and_tense
+    value: first-person mock travelogue, past tense
+    evidence: [1]
+
+  - id: style-satire-mode
+    kind: style
+    expect: must
+    field: satirical_target
+    value: European politics, science, and society refracted through distorted mirrors
+    evidence: [4]
+
+  - id: style-documentary-register
+    kind: style
+    expect: must
+    field: evidentiary_register
+    value: faux-documentary precision in inventories, dimensions, and dates
+    evidence: [2]
+
+  - id: style-titled-parts
+    kind: style
+    expect: must
+    field: structure
+    value: four titled parts, one voyage each
+    evidence: [1, 9, 17, 28]
+
+  # --- additional negative probes (≥15% of set, §5 authoring rule 2) ---
+  - id: item-watch-not-emperor
+    kind: item
+    expect: must_not
+    item: Gulliver's silver watch
+    holder: Emperor of Lilliput
+    as_of: 3
+    evidence: [2]
+    note: The watch is inventoried but never surrendered; listing it among the
+      confiscated items mirrors the real inventory-confusion error.
+
+  - id: thread-egg-war-stale-open
+    kind: thread
+    expect: must_not
+    thread: the war between Lilliput and Blefuscu over egg-breaking
+    status: open
+    as_of: 7
+    evidence: [5]
+    note: Peace was concluded on favorable terms; a war still raging by the
+      treason articles is stale state, not canon.
+
+  - id: rel-emperor-gulliver-not-sworn-friend
+    kind: relationship
+    expect: must_not
+    from: Emperor of Lilliput
+    to: Lemuel Gulliver
+    type: sworn friend of
+    evidence: [7]
+    note: By Part I's end the emperor's circle frames articles of treason
+      against him; amity is the superficial first-impression read.
+
+  - id: order-fleet-capture-not-before-arrival
+    kind: timeline
+    expect: must_not
+    sequence: ["capture of the Blefuscu fleet", "shipwreck ashore in Lilliput"]
+    evidence: [1, 5]
+    note: Inversion probe for the timeline grader — the fleet cannot be taken
+      before the traveler who takes it ever lands.
+
+  - id: char-no-princess-brobdingnag
+    kind: character
+    expect: must_not
+    name: Princess of Brobdingnag
+    evidence: [11]
+    note: Court scenes feature the queen and Glumdalclitch only; an invented
+      princess is a stock-courtroom fabrication.
+
+  - id: app-glumda-not-giantess-gulliver
+    kind: appearance
+    expect: must_not
+    character: Glumdalclitch
+    attribute: stature relative to Gulliver
+    contains: looked up to
+    evidence: [10]
+    note: She towers over Gulliver; probing against the Lilliput-direction
+      reading guards cross-part scale inversion in Brobdingnag.
+

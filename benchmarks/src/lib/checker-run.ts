@@ -14,6 +14,8 @@ import type { PerturbationCase } from "./perturbation-file.js";
 export interface CheckerCaseResult {
   readonly caseId: string;
   readonly raised: boolean;
+  /** Every flag message raised this run, in raise order (empty when clean). */
+  readonly flags: readonly string[];
 }
 
 export async function runCheckerCases(
@@ -27,7 +29,11 @@ export async function runCheckerCases(
   for (const { entry, chapterText } of cases) {
     const canon = canonBeforeOrdinal(entry.baseOrdinal, canonByOrdinal);
     const result = await check(canon, chapterText);
-    results.push({ caseId: entry.id, raised: result.flags.length > 0 });
+    results.push({
+      caseId: entry.id,
+      raised: result.flags.length > 0,
+      flags: result.flags.map((flag) => flag.message),
+    });
   }
   return results;
 }

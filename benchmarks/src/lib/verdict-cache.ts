@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { canonicalJson } from "./canonical-json.js";
+import { silentLogger, type Logger } from "./logger.js";
 
 /**
  * Verdict caches keyed by the hash of a canonical encoding of the judge
@@ -35,11 +36,13 @@ export class MemoryVerdictCache implements VerdictCache {
 export class FileVerdictCache implements VerdictCache {
   readonly #path: string;
   readonly #entries = new Map<string, boolean>();
+  readonly #log: Logger;
 
   /** A missing or malformed cache file simply starts empty — a cache may
    * never make a run fail. */
-  constructor(path: string) {
+  constructor(path: string, log: Logger = silentLogger) {
     this.#path = path;
+    this.#log = log;
     this.#load();
   }
 
@@ -53,17 +56,22 @@ export class FileVerdictCache implements VerdictCache {
   }
 
   #load(): void {
-    if (!existsSync(this.#path)) return;
+    if (!existsSync(this.#path)) {
+      this.#log.info(`verdict cache: empty (no file at ${this.#path})`);
+      return;
+    }
     let raw: unknown;
     try {
       raw = JSON.parse(readFileSync(this.#path, "utf8"));
     } catch {
+      this.#log.info(`verdict cache: malformed file at ${this.#path}, starting empty`);
       return;
     }
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return;
     for (const [key, value] of Object.entries(raw)) {
       if (typeof value === "boolean") this.#entries.set(key, value);
     }
+    this.#log.info(`verdict cache: loaded ${this.#entries.size} entr(ies) from ${this.#path}`);
   }
 
   #flush(): void {

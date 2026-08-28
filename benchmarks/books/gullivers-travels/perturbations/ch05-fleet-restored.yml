@@ -1,0 +1,11 @@
+kind: perturbation
+id: ch05-fleet-restored
+base_ordinal: 5
+file: perturbations/ch05-edited-fleet-restored.txt
+edits:
+  - description: >-
+      The emperor ceremoniously hands the entire captured Blefuscu fleet back,
+      contradicting the holder state after the stratagem; the fleet is never
+      returned during Part I.
+violates: [item-fleet-never-returned]
+expect: flag

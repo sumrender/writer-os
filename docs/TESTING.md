@@ -38,7 +38,7 @@ benchmarks/
   results/               # gitignored — never committed
 ```
 
-CLI sketch: `bench run --book tom-sawyer --axis extraction`
+CLI sketch: `bench run --book tom-sawyer --axis extraction [--runs <n>] [--pipeline <live|fake>] [--judge <stub|live>]`. The pipeline port now has real vendor-backed implementations on by default (`lib/agnes-*`); `--pipeline fake` pins the deterministic fakes for offline runs.
 Stack: TypeScript, Agnes AI vendor client (ADR-0004), files on disk — no database dependency.
 
 ## 4. Fixture book format
@@ -221,16 +221,149 @@ chapters:
 
 They fail for different reasons: beats fail on content fidelity; checker-mediation fails on assembly.
 
-## 9. Run protocol
+## 9. Running the benchmark yourself
 
-- 3 runs per book per axis, low temperature; report mean ± variance per metric.
-- LLM calls cached by input hash (cache lives under gitignored paths) — regrading is free.
-- **No run artifacts are stored**: JSON results and summaries print to terminal/CI and stay gitignored (decided).
+### 9.1 One-time setup
+
+```sh
+# from the repo root
+cd benchmarks
+pnpm install
+pnpm build                 # compiles dist/ (runs import dist/, tests import src/)
+
+# credentials — create benchmarks/.env (gitignored; never commit or log it):
+#   AGNES_API_KEY=<your key>
+#   AGNES_BASE_URL=https://apihub.agnes-ai.com/v1
+```
+
+Sanity-check connectivity without spending a full run:
+
+```sh
+node scripts/probe-agnes.ts     # plain completion + forced-tool verdict (~2 calls)
+node scripts/probe-extract.ts   # live-extracts one mini-book chapter (~1 call)
+```
+
+Expect `plain completion: "READY"` and a verdict JSON line. Anything else → check `.env` first.
+
+### 9.2 Commands
+
+All commands run from `benchmarks/`. Default protocol is **3 runs**, **live pipeline** (real Agnes calls), **live judge**; `--pipeline fake --judge stub` gives the fully offline deterministic reference (no network, no key needed).
+
+```sh
+# validate fixtures without any model calls
+node dist/cli.js list
+node dist/cli.js validate --book tom-sawyer
+
+# single axis, single book (the core command)
+node dist/cli.js run --book tom-sawyer  --axis extraction --judge live
+node dist/cli.js run --book gullivers-travels --axis extraction --judge live
+node dist/cli.js run --book tom-sawyer  --axis checker    --judge live
+node dist/cli.js run --book gullivers-travels --axis checker    --judge live
+node dist/cli.js run --book tom-sawyer  --axis generation --judge live
+node dist/cli.js run --book gullivers-travels --axis generation --judge live
+```
+
+Useful flags:
+- `--runs 1` — cheap probe before paying for the full protocol
+- `--pipeline fake` — offline deterministic pipeline
+- `--cache true|false` — caching toggle, **default `true`**. Every run always announces the active state as its first output line (`cache: ENABLED …` / `cache: DISABLED …`, stderr in `--format json` mode) so cached-vs-fresh provenance is unambiguous from the log alone. `false` forces every model call — judge verdicts *and* extractions — to reach the API fresh; nothing persists.
+- `--format json` — stdout = pure JSON report (validation chatter → stderr)
+- `--gates gates.json` — custom floors `{"global_precision_min":0..1,"recall_min":{"character":0..1}}`
+- `AGNES_MIN_INTERVAL_MS=5000 node …` — widen rate-limit spacing if you hit 429s
+
+**Run everything, both books, all axes** (sequential; logs everything):
+
+```sh
+./scripts/run-all-books.sh                # caching ON (default)
+BENCH_CACHE=false ./scripts/run-all-books.sh   # fully fresh, fully paid
+```
+
+The script **always** prints and records the cache state ("CACHE is ENABLED …" / "CACHE is DISABLED …"), forwards it to every run via `--cache`, and stamps it into each `index.txt` START line (`cache=true|false`).
+
+Recommended entry point: tom-sawyer then gullivers-travels, extraction → checker → generation each, writing one timestamped log per run under `results/runs/<UTC-stamp>-<book>-<axis>.txt` plus an append-only ledger (`START`/`END` lines with exit codes) in `results/runs/index.txt`. Review afterwards via `cat results/runs/index.txt`, then open the log of interest.
+
+### 9.3 What gets cached vs. paid (rate limits!)
+
+Agnes free tier allows ~20 executable requests/min. The client spaces request *starts* 3500 ms apart and retries 429/5xx with exponential backoff, so runs are slow but stable.
+
+| Call class | Cached? | Where |
+|---|---|---|
+| Judge verdicts (equivalence + sweep) | ✅ content-hash | `results/cache/judge-cache.json` |
+| Extraction responses | ✅ content-hash | `results/cache/extract-cache.json` |
+| Checker flags | ❌ fresh every run | — |
+| Generated prose | ❌ deliberately never (sampled prose is the thing measured) | — |
+
+Practical consequences:
+- A crashed/restarted run re-pays only check/generate work, not extraction.
+- Cache keys include exact prompts + tool schema: any prompt change invalidates them automatically, so caching can never serve stale output as new measurement.
+- Delete files under `results/cache/` to force a fully fresh (paid) rerun.
+
+### 9.4 Runtimes to expect
+
+Approximate wall-clock at default spacing on the free tier:
+
+| Command | Cold cache | Warm extraction cache |
+|---|---|---|
+| mini-book (4 chapters), any axis | ~4–6 min | ~2–4 min |
+| tom-sawyer extraction (36 ch × 3 runs) | ~40–60 min | ~1–2 min |
+| gullivers-travels extraction (39 ch × 3 runs) | ~60–90 min | ~1–2 min |
+| Real-book checker axis, 3 runs | ~45–70 min | ~15–25 min |
+| Real-book generation axis, 3 runs | ~20–35 min | ~15–30 min |
+| Full `run-all-books.sh`, cold cache | **~3–5 h** | safest to leave chained unattended |
+
+Long runs background cleanly (`nohup ./scripts/run-all-books.sh > results/runs/chain-stdout.txt 2>&1 &`); progress is observable at any moment via `results/runs/index.txt`.
+
+### 9.5 How to read the reports
+
+Every axis prints mean ± variance across runs (pure JSON with `--format json`). Exit code `0` = gates passed; nonzero = validation or gate failure.
+
+**Extraction** — per-kind precision/recall/F1, e.g.:
+```
+extraction — tom-sawyer (runs: 3)
+  character       precision 0.973 ±0.001  recall 0.812 ±0.004  f1 0.886 ...
+  global precision 0.95 (floor 0.500)
+  open-world sweep: swept 24.0/run, 1.33 unsupported → estimated fabrication rate 0.04 ±0.01
+  gates: PASS
+```
+Reading it: precision high + recall lower ⇒ model finds most facts but misses some asserted ones (see which kinds). Precision below floor ⇒ asserted-fact fabrication or over-strict equivalence judging. Recall zeros on rare kinds (`lexicon`, `thread`) in classic prose are common baseline findings, not harness errors. The fabrication rate is a judge-mediated **estimate**, deliberately reported separately.
+
+**Checker** — deviating cases print their actual flag text beneath the rate:
+```
+  control     ch02-control   expect no_flags false-positive rate 1.000
+      flag: Style guide sets narration to 'close third person…' …
+```
+A flagged control shows exactly what was flagged — always read this first when `gates: FAIL`.
+
+**Generation** — failing chapters print missed/violated beat text and checker flag messages:
+```
+  chapter 10  … pass rate 0.333
+      missing beat: Tom and Huck flee the graveyard
+```
+
+### 9.6 Known live baselines (mini-book · agnes-2.5-flash)
+
+Recorded honestly from live runs; treat as vendor-model characterizations, not harness bugs:
+
+| Axis | Result | Diagnosis |
+|---|---|---|
+| Extraction | **PASS** — global precision 1.000; F1 gaps on `appearance`/`thread`/`timeline` | Model omits whole kinds in tiny chapters; lenient gates absorb it |
+| Checker | FAIL — perturbation catch 1.000 but control FP 0.500 | Model treats quoted *dialogue* as contradicting a narration-*style* fact, beyond its written contract ("never flag stylistic variation"); prompt-contract sharpening pending |
+| Generation | FAIL — chapter 4 beats omitted in all 3 sampled drafts | Genuine prose-fidelity gap; exact missing beats visible via §9.5 evidence lines |
+
+Real-book baselines accumulate under `results/runs/` — check `index.txt` for completed runs; report shapes are identical to §9.5.
+
+### 9.7 Trust-boundary hardening baked into the live ops
+
+The real model emits structured-output noise Agnes cannot schema-enforce (forced-tool parameters are one flat schema; no JSON-schema response mode). The ops therefore: canonicalize documented noise classes (stray cross-kind fields dropped; missing `kind` inferred only when fields resolve uniquely to one kind; thread-identity-under-`name` and bare-character mentions normalized); attach the raw payload snippet (`near: {…}`) to every validation rejection so failures are diagnosable from run logs alone; retry once with the validator error fed back before propagating failure. Genuinely ambiguous payloads still hard-fail — nothing silently reaches canon state.
+
 
 ## 10. Open items
 
 - [x] Download source texts, split into chapters, write manifests (both books)
-- [ ] Author assertion sets (both books) — human-owned, per §5 rules
-- [ ] Edit perturbation chapters + annotations (§7) for tom-sawyer and gullivers-travels — mini-book's are done (demonstrates the harness); real-book fixtures remain a human task
-- [ ] Declare beats per chapter (§8) — can wait until axis 3
-- [ ] Set gate thresholds after first baseline runs
+- [x] Author assertion sets (both books) — human-authored, present for tom-sawyer + gullivers-travels
+- [x] Edit perturbation chapters + annotations (§7) for tom-sawyer and gullivers-travels (2 perturbations + 2 controls each); mini-book's done
+- [x] Declare beats per chapter (§8) — 4 beat chapters per real book authored
+- [x] Live pipeline ops (extract/check/generate) + live judge wired behind `pipeline.ts`; live verification of all three axes completed on mini-book
+- [ ] Sharpen checker prompt contract after §9.6 control-FP finding (dialogue vs style contradiction)
+- [ ] Record real-book baseline numbers from `results/runs/` once full protocols complete
+- [ ] Tighten gate thresholds after first real-book baselines exist

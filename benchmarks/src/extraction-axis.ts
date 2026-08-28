@@ -6,6 +6,7 @@ import type { Judge } from "./lib/judge.js";
 import { runExtraction } from "./lib/extraction-run.js";
 import { gradeAssertionSet, type GradedAssertion } from "./lib/grader.js";
 import { bookSourceText, sweepUnmatchedFacts } from "./lib/sweep.js";
+import { silentLogger, type Logger } from "./lib/logger.js";
 import {
   globalPrecision,
   kindMetrics,
@@ -34,6 +35,8 @@ export interface ExtractionAxisInput {
   readonly judge: Judge;
   readonly gates: GateConfig;
   readonly runs?: number;
+  /** Optional progress sink; defaults to silent. */
+  readonly log?: Logger;
 }
 
 export interface KindReport {
@@ -63,10 +66,14 @@ export interface ExtractionAxisReport {
 }
 
 export async function runExtractionAxis(input: ExtractionAxisInput): Promise<ExtractionAxisReport> {
+  const log = input.log ?? silentLogger;
   const runs = input.runs ?? RUNS_PER_BOOK;
   if (!Number.isInteger(runs) || runs < 1) {
     throw new Error(`extraction axis requires at least one run (got ${input.runs})`);
   }
+  log.info(
+    `extraction axis: ${input.bookId} — ${runs} run(s), ${input.chapters.length} chapter(s), ${input.assertions.assertions.length} assertion(s)`,
+  );
 
   const sourceText = bookSourceText(
     input.chapters.map((chapter) => ({ ordinal: chapter.ordinal, text: chapter.text })),
@@ -78,8 +85,15 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
   const unsupportedPerRun: number[] = [];
 
   for (let run = 0; run < runs; run++) {
-    const snapshots = await runExtraction(input.chapters, input.extract);
-    const gradedExtraction = await gradeAssertionSet(input.assertions, snapshots, input.judge);
+    log.info(`run ${run + 1}/${runs}: extracting ${input.chapters.length} chapter(s)`);
+    const snapshots = await runExtraction(input.chapters, input.extract, log);
+    log.info(`run ${run + 1}/${runs}: grading ${input.assertions.assertions.length} assertion(s)`);
+    const gradedExtraction = await gradeAssertionSet(
+      input.assertions,
+      snapshots,
+      input.judge,
+      log,
+    );
 
     const counts = countsByKind(gradedExtraction.graded);
     precisions.push(globalPrecision([...counts.values()]));
@@ -89,15 +103,24 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
       bucket.counts.push(kindCounts);
       kindStats.set(kind, bucket);
     }
+    const passed = gradedExtraction.graded.filter((g) => g.verdict === "pass-exact" || g.verdict === "pass-judged").length;
+    log.info(
+      `run ${run + 1}/${runs}: graded ${gradedExtraction.graded.length} (${passed} pass, ${gradedExtraction.graded.length - passed} miss)`,
+    );
 
+    log.info(`run ${run + 1}/${runs}: sweeping unmatched facts against source`);
     const sweep = await sweepUnmatchedFacts(
       gradedExtraction.finalBible,
       gradedExtraction.claimedKeys,
       sourceText,
       input.judge,
+      log,
     );
     sweptPerRun.push(sweep.swept);
     unsupportedPerRun.push(sweep.unsupported);
+    log.info(
+      `run ${run + 1}/${runs}: swept ${sweep.swept} fact(s), ${sweep.unsupported} unsupported (est. fabrication rate ${(sweep.rate).toFixed(3)})`,
+    );
   }
 
   const kinds = [...kindStats.entries()].map(([kind, bucket]) => ({
@@ -121,6 +144,9 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
     globalPrecision: statsOf(precisions).mean,
     recallByKind,
   });
+  log.info(
+    `extraction axis: gates ${gates.passed ? "PASS" : "FAIL"} (global precision ${(statsOf(precisions).mean).toFixed(3)})`,
+  );
 
   return {
     book: input.bookId,

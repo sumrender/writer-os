@@ -1,15 +1,7 @@
 import {
   THREAD_STATUSES,
-  type AppearanceEntry,
   type BibleState,
-  type CharacterEntry,
-  type ItemEntry,
-  type LexiconEntry,
-  type RelationshipEntry,
-  type StyleEntry,
-  type ThreadEntry,
   type ThreadStatus,
-  type WorldRuleEntry,
 } from "./bible.js";
 import type {
   Check,
@@ -18,6 +10,7 @@ import type {
   Generate,
   GeneratedChapter,
 } from "./pipeline.js";
+import { applyFact, type ExtractedFact } from "./bible-merge.js";
 
 /**
  * Rule-based deterministic pipeline fakes. The mini-book fixture
@@ -43,17 +36,6 @@ import type {
 
 const NAME = "[A-Z][A-Za-z'’-]*(?: [A-Za-z][A-Za-z'’-]*)*";
 const FREE = "[^.]+";
-
-type ExtractedFact =
-  | ({ readonly kind: "character" } & CharacterEntry)
-  | ({ readonly kind: "appearance" } & AppearanceEntry)
-  | ({ readonly kind: "relationship" } & RelationshipEntry)
-  | ({ readonly kind: "item" } & ItemEntry)
-  | ({ readonly kind: "thread" } & ThreadEntry)
-  | ({ readonly kind: "world_rule" } & WorldRuleEntry)
-  | { readonly kind: "timeline"; readonly event: string }
-  | ({ readonly kind: "lexicon" } & LexiconEntry)
-  | ({ readonly kind: "style" } & StyleEntry);
 
 interface FactRule {
   readonly pattern: RegExp;
@@ -151,95 +133,6 @@ function parseFacts(text: string): ExtractedFact[] {
     }
   }
   return facts;
-}
-
-/** Equality on plain data entries; key order is fixed by our own constructors. */
-function serializedEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function appendIfNew<T>(list: readonly T[], entry: T): T[] {
-  return list.some((existing) => serializedEqual(existing, entry))
-    ? [...list]
-    : [...list, entry];
-}
-
-function replaceOrAppend<T>(
-  list: readonly T[],
-  entry: T,
-  identity: (entry: T) => string,
-): T[] {
-  const key = identity(entry);
-  return list.some((existing) => identity(existing) === key)
-    ? list.map((existing) => (identity(existing) === key ? entry : existing))
-    : [...list, entry];
-}
-
-export function applyFact(bible: BibleState, fact: ExtractedFact): BibleState {
-  switch (fact.kind) {
-    case "character":
-      return {
-        ...bible,
-        characters: appendIfNew(bible.characters, { name: fact.name }),
-      };
-    case "appearance":
-      return {
-        ...bible,
-        appearances: appendIfNew(bible.appearances, {
-          character: fact.character,
-          attribute: fact.attribute,
-          contains: fact.contains,
-        }),
-      };
-    case "relationship":
-      return {
-        ...bible,
-        relationships: replaceOrAppend(
-          bible.relationships,
-          { from: fact.from, to: fact.to, relationType: fact.relationType },
-          (r) => `${r.from}→${r.to}`,
-        ),
-      };
-    case "item":
-      return {
-        ...bible,
-        items: replaceOrAppend(
-          bible.items,
-          { item: fact.item, holder: fact.holder },
-          (i) => i.item,
-        ),
-      };
-    case "thread":
-      return {
-        ...bible,
-        threads: replaceOrAppend(
-          bible.threads,
-          { thread: fact.thread, status: fact.status },
-          (t) => t.thread,
-        ),
-      };
-    case "world_rule":
-      return { ...bible, worldRules: appendIfNew(bible.worldRules, { topic: fact.topic }) };
-    case "timeline":
-      return { ...bible, timeline: appendIfNew(bible.timeline, fact.event) };
-    case "lexicon":
-      return {
-        ...bible,
-        lexicon: appendIfNew(bible.lexicon, {
-          term: fact.term,
-          lockedSpelling: fact.lockedSpelling,
-        }),
-      };
-    case "style":
-      return {
-        ...bible,
-        style: replaceOrAppend(
-          bible.style,
-          { field: fact.field, value: fact.value },
-          (s) => s.field,
-        ),
-      };
-  }
 }
 
 export const fakeExtract: Extract = async (chapterText, _ordinal, bibleSoFar) =>

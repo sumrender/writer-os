@@ -1,0 +1,11 @@
+kind: perturbation
+id: ch34-fortune-seized
+base_ordinal: 34
+file: perturbations/ch34-edited-fortune-seized.txt
+edits:
+  - description: >-
+      Judge Thatcher seizes the whole $12,000 treasure for his own household,
+      contradicting the joint Tom-and-Huck holder state established when the
+      gold is divided.
+violates: [item-treasure-holder]
+expect: flag

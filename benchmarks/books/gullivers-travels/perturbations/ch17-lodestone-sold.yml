@@ -1,0 +1,11 @@
+kind: perturbation
+id: ch17-lodestone-sold
+base_ordinal: 17
+file: perturbations/ch17-edited-lodestone-sold.txt
+edits:
+  - description: >-
+      The astronomers of Laputa sell the lodestone outright to merchants,
+      contradicting the instrument's keeper and leaving the flying island
+      physically unexplained.
+violates: [item-lodestone-laputa]
+expect: flag

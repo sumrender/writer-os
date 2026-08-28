@@ -17,6 +17,12 @@ import { createLiveJudge } from "./lib/live-judge.js";
 import { CachingJudge } from "./lib/cached-judge.js";
 import { FileVerdictCache } from "./lib/verdict-cache.js";
 import { fakeCheck, fakeExtract, fakeGenerate } from "./lib/fakes.js";
+import { createAgnesClient, type AgnesClient } from "./lib/agnes-client.js";
+import { createAgnesExtract } from "./lib/agnes-extract.js";
+import { FileResponseCache } from "./lib/response-cache.js";
+import { createAgnesCheck } from "./lib/agnes-check.js";
+import { createAgnesGenerate } from "./lib/agnes-generate.js";
+import type { Check, Extract, Generate } from "./lib/pipeline.js";
 import { loadPerturbationSet } from "./lib/perturbation-file.js";
 import { RUNS_PER_BOOK } from "./lib/metrics.js";
 import { runExtractionAxis } from "./extraction-axis.js";
@@ -30,6 +36,7 @@ import {
   formatJsonReport,
   formatTextReport,
 } from "./report.js";
+import { levelFilter, stderrLogger, type LogLevel, type Logger } from "./lib/logger.js";
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -47,17 +54,43 @@ type Axis = (typeof AXES)[number];
 
 const JUDGES = ["stub", "live"] as const;
 const FORMATS = ["text", "json"] as const;
+const PIPELINES = ["live", "fake"] as const;
+type PipelineKind = (typeof PIPELINES)[number];
+
+const LOG_LEVELS = ["off", "info", "debug"] as const;
+
+/**
+ * The registered operation implementations per selection: vendor-backed
+ * (default) or deterministic fakes (`--pipeline fake`, fully offline). One
+ * AgnesClient backs every live op, so rate-limit spacing stays global even
+ * when judge verdicts interleave with pipeline traffic.
+ */
+interface PipelineOps {
+  readonly extract: Extract;
+  readonly check: Check;
+  readonly generate: Generate;
+  /** Present exactly when the ops share their client with the judge seam. */
+  readonly agnesClient?: AgnesClient;
+}
 
 const USAGE = `usage:
   bench validate --book <id> [--books-root <dir>]
   bench run --book <id> --axis <extraction|checker|generation>
-            [--runs <n>] [--judge <stub|live>] [--format <text|json>] [--gates <file>]
-            [--books-root <dir>]
+            [--runs <n>] [--pipeline <live|fake>] [--judge <stub|live>]
+            [--cache <true|false>] [--log-level <off|info|debug>]
+            [--format <text|json>] [--gates <file>] [--books-root <dir>]
   bench list [--books-root <dir>]
   bench help
 
-extraction defaults: ${RUNS_PER_BOOK} runs · stub judge (offline) · text report · lenient gates
-live judging reads AGNES_API_KEY (and optional AGNES_BASE_URL); verdicts cache by input hash.`;
+run defaults: ${RUNS_PER_BOOK} runs · live pipelines (AGNES_API_KEY required;
+pass --pipeline fake for a fully offline run) · stub judge · text report · lenient gates · cache on · info logs
+The judge and pipelines share one rate-limited Agnes client (free tier executes
+~20 RPM; AGNES_MIN_INTERVAL_MS widens the spacing). --cache true (default)
+persists judge verdicts and extraction responses by input hash under
+results/cache/; --cache false forces every call to reach the API fresh.
+--log-level controls progress lines on stderr (stdout stays pure for --format json):
+info = phase + per-chapter + per-assertion progress; debug = + every API call,
+cache hit/miss, and retry. Both off by default at --log-level off.`;
 
 const defaultBooksRoot = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -73,12 +106,17 @@ interface Options {
   judge?: string;
   format?: string;
   gates?: string;
+  pipeline?: string;
+  cache?: string;
+  logLevel?: string;
 }
 
 export interface RunCliOverrides {
   booksRoot?: string;
   /** Injected by tests so cache writes never leave the sandbox. */
   judgeCachePath?: string;
+  /** Injected by tests so extraction cache writes never leave the sandbox. */
+  extractCachePath?: string;
 }
 
 interface ResolvedOptions {
@@ -131,6 +169,9 @@ function parseOptions(tokens: string[]): Options {
     "--judge": "judge",
     "--format": "format",
     "--gates": "gates",
+    "--pipeline": "pipeline",
+    "--cache": "cache",
+    "--log-level": "logLevel",
   };
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -196,6 +237,33 @@ function isAxis(value: string | undefined): value is Axis {
 
 type Format = (typeof FORMATS)[number];
 
+/** Parses --cache (default true); anything but "true"/"false" is a usage error. */
+function cacheEnabledOf(options: Options, io: CliIo): boolean | null {
+  const raw = options.cache;
+  if (raw === undefined) return true;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  io.stderr(`--cache must be one of true, false (got: ${raw})`);
+  return null;
+}
+
+/** Parses --log-level (default "info"). Anything else is a usage error. */
+function logLevelOf(options: Options, io: CliIo): LogLevel | null {
+  const raw = options.logLevel ?? "info";
+  if ((LOG_LEVELS as readonly string[]).includes(raw)) return raw as LogLevel;
+  io.stderr(`--log-level must be one of ${LOG_LEVELS.join(", ")} (got: ${raw})`);
+  return null;
+}
+
+/** Builds the level-filtered stderr logger the runner threads through ops. */
+function buildLogger(io: CliIo, level: LogLevel): Logger {
+  if (level === "off") {
+    return { info: () => {}, debug: () => {} };
+  }
+  const inner = stderrLogger(io.stderr);
+  return levelFilter(inner, level);
+}
+
 function isFormat(value: string): value is Format {
   return (FORMATS as readonly string[]).includes(value);
 }
@@ -223,6 +291,8 @@ type AxisCommand = (
   options: Options,
   io: CliIo,
   overrides: RunCliOverrides,
+  ops: PipelineOps,
+  log: Logger,
 ) => Promise<number>;
 
 const AXIS_COMMANDS: ReadonlyMap<Axis, AxisCommand> = new Map([
@@ -256,6 +326,31 @@ async function commandRun(
     return EXIT_USAGE;
   }
 
+  const cacheEnabled = cacheEnabledOf(options, io);
+  if (cacheEnabled === null) {
+    io.stderr(USAGE);
+    return EXIT_USAGE;
+  }
+  const logLevel = logLevelOf(options, io);
+  if (logLevel === null) {
+    io.stderr(USAGE);
+    return EXIT_USAGE;
+  }
+  const log = buildLogger(io, logLevel);
+  log.info(`log level: ${logLevel}`);
+  // Always announced so cached-vs-fresh provenance of every report is
+  // unambiguous from its own output. Machine-readable mode keeps stdout
+  // pure JSON, so the announcement follows the validation-chatter pattern.
+  const announce = (line: string): void =>
+    format === "json" ? io.stderr(line) : io.stdout(line);
+  announce(
+    `cache: ${cacheEnabled ? "ENABLED" : "DISABLED"} — ${
+      cacheEnabled
+        ? "judge verdicts + extraction responses persist by input hash under results/cache/"
+        : "every model call reaches the API fresh; nothing persists"
+    }`,
+  );
+
   // Machine-readable mode keeps stdout pure JSON; validation chatter moves
   // out of the way (errors already go to stderr regardless).
   const result = validateOrReport(
@@ -272,7 +367,9 @@ async function commandRun(
 
   const command = AXIS_COMMANDS.get(options.axis);
   if (command !== undefined) {
-    return command(book, format, options, io, overrides);
+    const ops = buildPipelineOps(options, io, overrides, cacheEnabled, log);
+    if (ops === null) return EXIT_USAGE;
+    return command(book, format, options, io, overrides, ops, log);
   }
 
   io.stdout(
@@ -290,6 +387,23 @@ interface LoadedBook {
   readonly chapters: readonly ValidatedChapter[];
 }
 
+/** Wraps the judge in the persisted verdict cache unless caching is disabled. */
+function wrapJudge(
+  baseJudge: Judge,
+  cacheEnabled: boolean,
+  options: Options,
+  overrides: RunCliOverrides,
+  log: Logger,
+): Judge {
+  return cacheEnabled
+    ? new CachingJudge(
+        baseJudge,
+        new FileVerdictCache(cachePathOf(options, overrides), log),
+        log,
+      )
+    : baseJudge;
+}
+
 /**
  * Extraction end-to-end: assertions → N graded runs over the registered
  * pipeline → cached judge mediation → sweep → gates. Everything prints;
@@ -301,6 +415,8 @@ async function runExtractionCommand(
   options: Options,
   io: CliIo,
   overrides: RunCliOverrides,
+  ops: PipelineOps,
+  log: Logger,
 ): Promise<number> {
   const assertions = loadAssertionSet(book.bookDir, { maxOrdinal: maxOrdinal(book.chapters) });
   if (!assertions.ok) {
@@ -317,19 +433,26 @@ async function runExtractionCommand(
     return EXIT_USAGE;
   }
 
-  const baseJudge = selectJudge(options.judge ?? "stub", io);
+  const baseJudge = selectJudge(options.judge ?? "stub", io, ops.agnesClient, log);
   if (baseJudge === null) return EXIT_USAGE;
 
-  const judge = new CachingJudge(baseJudge, new FileVerdictCache(cachePathOf(options, overrides)));
+  const judge = wrapJudge(
+    baseJudge,
+    cacheEnabledOf(options, io) ?? true,
+    options,
+    overrides,
+    log,
+  );
 
   const report = await runExtractionAxis({
     bookId: book.bookId,
     chapters: book.chapters,
     assertions: assertions.set,
-    extract: fakeExtract,
+    extract: ops.extract,
     judge,
     gates,
     runs,
+    log,
   });
 
   if (format === "json") {
@@ -356,6 +479,8 @@ async function runCheckerCommand(
   _options: Options,
   io: CliIo,
   _overrides: RunCliOverrides,
+  ops: PipelineOps,
+  _log: Logger,
 ): Promise<number> {
   // Assertions are optional here: books with no authored assertion set yet
   // (checker fixtures precede assertion authoring per docs/TESTING.md §10)
@@ -380,8 +505,8 @@ async function runCheckerCommand(
     bookId: book.bookId,
     chapters: book.chapters,
     cases: perturbations.cases,
-    extract: fakeExtract,
-    check: fakeCheck,
+    extract: ops.extract,
+    check: ops.check,
   });
 
   if (format === "json") {
@@ -408,6 +533,8 @@ async function runGenerationCommand(
   options: Options,
   io: CliIo,
   overrides: RunCliOverrides,
+  ops: PipelineOps,
+  log: Logger,
 ): Promise<number> {
   const beats = loadBeatSet(book.bookDir, { maxOrdinal: maxOrdinal(book.chapters) });
   if (!beats.ok) {
@@ -415,18 +542,24 @@ async function runGenerationCommand(
     return EXIT_VALIDATION_FAILED;
   }
 
-  const baseJudge = selectJudge(options.judge ?? "stub", io);
+  const baseJudge = selectJudge(options.judge ?? "stub", io, ops.agnesClient, log);
   if (baseJudge === null) return EXIT_USAGE;
 
-  const judge = new CachingJudge(baseJudge, new FileVerdictCache(cachePathOf(options, overrides)));
+  const judge = wrapJudge(
+    baseJudge,
+    cacheEnabledOf(options, io) ?? true,
+    options,
+    overrides,
+    log,
+  );
 
   const report = await runGenerationAxis({
     bookId: book.bookId,
     chapters: book.chapters,
     beats: beats.set,
-    extract: fakeExtract,
-    generate: fakeGenerate,
-    check: fakeCheck,
+    extract: ops.extract,
+    generate: ops.generate,
+    check: ops.check,
     judge,
   });
 
@@ -439,6 +572,74 @@ async function runGenerationCommand(
   }
 
   return report.passed ? EXIT_OK : EXIT_GATE_FAILED;
+}
+
+/**
+ * Resolves the pipeline selection into concrete op implementations. Live is
+ * the default (credential-gated via AGNES_API_KEY; AGNES_BASE_URL optional;
+ * AGNES_MIN_INTERVAL_MS widens the fixed-interval throttle); `fake` stays
+ * available as the fully-offline deterministic reference implementation.
+ */
+function buildPipelineOps(
+  options: Options,
+  io: CliIo,
+  overrides: RunCliOverrides,
+  cacheEnabled: boolean,
+  log: Logger,
+): PipelineOps | null {
+  const selection = options.pipeline ?? "live";
+  if (!(PIPELINES as readonly string[]).includes(selection)) {
+    io.stderr(`--pipeline must be one of ${PIPELINES.join(", ")} (got: ${selection})`);
+    return null;
+  }
+  if (selection === "fake") {
+    log.info("pipeline: fake (offline deterministic reference)");
+    return { extract: fakeExtract, check: fakeCheck, generate: fakeGenerate };
+  }
+
+  const apiKey = process.env.AGNES_API_KEY;
+  if (apiKey === undefined || apiKey.trim().length === 0) {
+    io.stderr("the live pipeline requires AGNES_API_KEY in the environment");
+    return null;
+  }
+  const minIntervalMs = minIntervalMsFromEnv(io);
+  if (minIntervalMs === null) return null;
+
+  const baseUrl = process.env.AGNES_BASE_URL;
+  const agnesClient = createAgnesClient({
+    apiKey,
+    ...(baseUrl !== undefined && baseUrl.trim().length > 0 ? { baseUrl } : {}),
+    ...(minIntervalMs !== undefined ? { minIntervalMs } : {}),
+    log,
+  });
+  return {
+    agnesClient,
+    // Extraction response cache (temp-0 requests are input-deterministic;
+    // hits re-validate at the trust boundary, prompt changes re-key). Check
+    // stays uncached — per-run case count is small — and generate is never
+    // cached because sampled prose is the thing being measured. All of it
+    // is off when --cache false forces fresh API traffic.
+    extract: cacheEnabled
+      ? createAgnesExtract(agnesClient, {
+          responseCache: new FileResponseCache(extractCachePathOf(options, overrides), log),
+          log,
+        })
+      : createAgnesExtract(agnesClient, { log }),
+    check: createAgnesCheck(agnesClient),
+    generate: createAgnesGenerate(agnesClient),
+  };
+}
+
+/** Free-tier throttling can vary per key; operators may widen the spacing. */
+function minIntervalMsFromEnv(io: CliIo): number | undefined | null {
+  const raw = process.env.AGNES_MIN_INTERVAL_MS;
+  if (raw === undefined || raw.trim().length === 0) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    io.stderr("AGNES_MIN_INTERVAL_MS must be a non-negative integer of milliseconds");
+    return null;
+  }
+  return value;
 }
 
 function loadGateConfig(options: Options, io: CliIo): GateConfig | null {
@@ -463,12 +664,23 @@ function parseRunCount(raw: string | undefined): number | null {
   return Number.isInteger(value) && value >= 1 ? value : null;
 }
 
-function selectJudge(selection: string, io: CliIo): Judge | null {
+function selectJudge(
+  selection: string,
+  io: CliIo,
+  sharedClient?: AgnesClient,
+  log: Logger = { info: () => {}, debug: () => {} },
+): Judge | null {
   if (!(JUDGES as readonly string[]).includes(selection)) {
     io.stderr(`--judge must be one of ${JUDGES.join(", ")} (got: ${selection})`);
     return null;
   }
-  if (selection === "stub") return createStubJudge();
+  if (selection === "stub") {
+    log.info("judge: stub (offline deterministic)");
+    return createStubJudge();
+  }
+
+  log.info("judge: live (Agnes-backed)");
+  if (sharedClient !== undefined) return createLiveJudge({ client: sharedClient, log });
 
   const apiKey = process.env.AGNES_API_KEY;
   if (apiKey === undefined || apiKey.trim().length === 0) {
@@ -479,6 +691,7 @@ function selectJudge(selection: string, io: CliIo): Judge | null {
   return createLiveJudge({
     apiKey,
     ...(baseUrl !== undefined && baseUrl.trim().length > 0 ? { baseUrl } : {}),
+    log,
   });
 }
 
@@ -486,6 +699,13 @@ function cachePathOf(options: Options, overrides: RunCliOverrides): string {
   return (
     overrides.judgeCachePath ??
     join(booksRootOf(options, overrides), "..", "results", "cache", "judge-cache.json")
+  );
+}
+
+function extractCachePathOf(options: Options, overrides: RunCliOverrides): string {
+  return (
+    overrides.extractCachePath ??
+    join(booksRootOf(options, overrides), "..", "results", "cache", "extract-cache.json")
   );
 }
 

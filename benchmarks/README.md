@@ -26,6 +26,8 @@ Fixture-side machinery beside `src/lib/`:
 - `lib/sweep.ts` — open-world sweep: facts no positive assertion claimed get judged against the source text; yields an *estimated* fabrication rate reported separately from exact scores
 - `lib/judge.ts` / `lib/stub-judge.ts` / `lib/live-judge.ts` — the judge seam: equivalence-only verdicts per ADR-0005 (two values + fixed rubric in, equivalent-or-not out, never fixture text); a scripted stub keeps runs offline, the Agnes-backed implementation (`agnes-2.5-flash`, forced tool-call verdicts per ADR-0004) shares the identical interface
 - `lib/verdict-cache.ts` / `lib/cached-judge.ts` — all judge calls cached by SHA-256 of their canonical input; cache lives under gitignored `results/cache/`
+
+- `lib/response-cache.ts` — extraction-only raw-response cache (`results/cache/extract-cache.json`): temp-0 extraction requests are input-deterministic, so repeats across runs/processes are free; stored payloads re-enter the same validation boundary on read, and any prompt/tool/sampling change produces new keys. Check and generate calls are deliberately never cached (checks are few; generation prose is sampled — caching it would hollow out what the axis measures)
 - `lib/metrics.ts` / `lib/gates.ts` — per-kind precision/recall/F1 arithmetic, mean ± variance aggregation, global precision floor + per-kind recall floors (lenient defaults, configurable)
 - `extraction-axis.ts` / `report.ts` — the 3-run protocol per book with mean ± variance reporting; text and JSON output print to terminal/CI only
 
@@ -49,11 +51,24 @@ node dist/cli.js list
 | Flag | Default | Meaning |
 |---|---|---|
 | `--runs <n>` | `3` | sequential extraction passes; metrics report mean ± variance |
-| `--judge <stub\|live>` | `stub` | scripted offline stub vs Agnes-backed judge (`AGNES_API_KEY`, optional `AGNES_BASE_URL`) |
+| `--pipeline <live\|fake>` | `live` | vendor-backed ops through Agnes (`AGNES_API_KEY` required) vs the deterministic fakes (`fake` = fully offline) |
+| `--judge <stub\|live>` | `stub` | scripted offline stub vs Agnes-backed judge (`AGNES_BASE_URL` optional) |
 | `--format <text\|json>` | `text` | human text or machine JSON on stdout (JSON mode keeps stdout pure) |
 | `--gates <file>` | lenient | JSON: `{"global_precision_min": 0..1, "recall_min": {"<kind>": 0..1}}`; evaluated on run means |
 
-The registered extraction pipeline is currently the deterministic fake; real pipelines slot into the same port with zero benchmark changes.
+CLI invocation loads `benchmarks/.env` automatically (`AGNES_API_KEY`, `AGNES_BASE_URL`,
+`AGNES_MIN_INTERVAL_MS`).
+
+All three ops are registered twice behind one port: vendor-backed implementations
+(`lib/agnes-client.ts` / `agnes-extract.ts` / `agnes-check.ts` / `agnes-generate.ts`, default
+`--pipeline live`) and the deterministic fakes above (explicit `--pipeline fake`). Live traffic
+flows through one shared rate-limited client — fixed-interval spacing defaulting to 3.5 s between
+request starts (~17 RPM of headroom under Agnes's free-tier 20 executable RPM; widen via
+`AGNES_MIN_INTERVAL_MS`) plus exponential backoff on 429/5xx — with retry-safe payloads guarded
+against the model's 512K context window (`lib/agnes-client.ts::assertWithinContextWindow`).
+Model facts are validated at the trust boundary and folded into canon by the merge algebra in
+`lib/bible-merge.ts`, so grader-visible state is identical regardless of fact origin. A
+connectivity probe for both transport modes lives at `scripts/probe-agnes.ts`.
 
 Exit codes: `0` ok · `1` fixture validation failure · `2` usage error · `3` requested axis has no registered pipeline yet (validation still ran first) · `4` gate failure (global precision floor or a per-kind recall floor missed).
 

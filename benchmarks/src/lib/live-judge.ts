@@ -1,5 +1,10 @@
-import OpenAI from "openai";
 import type { EquivalenceRequest, Judge, SourceSupportRequest } from "./judge.js";
+import { createAgnesClient, type AgnesClient } from "./agnes-client.js";
+import {
+  firstForcedToolArguments,
+  parseVerdictArguments,
+} from "./agnes-response.js";
+import { silentLogger, type Logger } from "./logger.js";
 
 /**
  * Vendor-backed Judge (ADR-0004: Agnes AI's OpenAI-compatible endpoint,
@@ -16,10 +21,19 @@ import type { EquivalenceRequest, Judge, SourceSupportRequest } from "./judge.js
 export const JUDGE_MODEL = "agnes-2.5-flash";
 
 export interface LiveJudgeOptions {
-  readonly apiKey: string;
+  readonly apiKey?: string;
   readonly baseUrl?: string;
   readonly model?: string;
+  /**
+   * Pre-built client to share the rate-limited Agnes queue with other live
+   * operations (extraction/checking/generation). When omitted, one client
+   * is constructed from apiKey/baseUrl.
+   */
+  readonly client?: AgnesClient;
+  /** Optional progress sink. */
+  readonly log?: Logger;
 }
+
 
 interface VerdictToolDefinition {
   readonly type: "function";
@@ -98,67 +112,25 @@ export function supportUserPrompt(request: SourceSupportRequest): string {
   return `Extracted fact:\n${request.fact}\n\nSource text:\n${request.sourceText}\n\nIs the fact supported by the source text?`;
 }
 
-/**
- * Validates the forced tool-call arguments at the trust boundary: JSON
- * object with a `verdict` equal to one of the two allowed labels.
- */
-export function parseVerdictArguments(
-  rawArguments: string,
-  positiveLabel: string,
-  negativeLabel: string,
-): boolean {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawArguments);
-  } catch {
-    throw new Error(`judge returned arguments that are not valid JSON: ${rawArguments.slice(0, 120)}`);
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error("judge verdict arguments must be a JSON object");
-  }
-  const verdict = (parsed as Record<string, unknown>).verdict;
-  if (typeof verdict !== "string") {
-    throw new Error('judge verdict object must carry a string "verdict" field');
-  }
-  if (verdict === positiveLabel) return true;
-  if (verdict === negativeLabel) return false;
-  throw new Error(`judge verdict "${verdict}" is neither "${positiveLabel}" nor "${negativeLabel}"`);
-}
-
-/** Extracts the forced single tool call's argument string from a completion-shaped response. */
-function firstForcedVerdictArguments(response: unknown): string {
-  if (typeof response !== "object" || response === null || !("choices" in response)) {
-    throw new Error("judge response has no choices");
-  }
-  const choices = (response as { choices: unknown }).choices;
-  if (!Array.isArray(choices) || choices.length === 0) {
-    throw new Error("judge response carried no choices");
-  }
-  const message = choices[0] as { message?: unknown } | undefined;
-  const toolCalls =
-    typeof message === "object" && message !== null && "message" in message
-      ? (message.message as { tool_calls?: unknown } | undefined)?.tool_calls
-      : undefined;
-  if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
-    throw new Error("judge did not answer with the forced verdict tool call");
-  }
-  const first = toolCalls[0] as { function?: { arguments?: unknown } } | undefined;
-  const args = first?.function?.arguments;
-  if (typeof args !== "string" || args.length === 0) {
-    throw new Error("judge verdict tool call carries no arguments");
-  }
-  return args;
-}
+/** Arguments parsing sits on the shared response seam; kept exported for compat. */
+export { parseVerdictArguments } from "./agnes-response.js";
 
 export function createLiveJudge(options: LiveJudgeOptions): Judge {
-  if (options.apiKey.trim().length === 0) {
+  if (options.client === undefined && (options.apiKey ?? "").trim().length === 0) {
     throw new Error("live judge requires an Agnes AI API key");
   }
   const model = options.model ?? JUDGE_MODEL;
-  const client = new OpenAI({
-    apiKey: options.apiKey,
-    ...(options.baseUrl !== undefined ? { baseURL: options.baseUrl } : {}),
-  });
+  const log = options.log ?? silentLogger;
+  const client =
+    options.client ??
+    createAgnesClient({
+      apiKey: options.apiKey ?? "",
+      ...(options.baseUrl !== undefined && options.baseUrl.trim().length > 0
+        ? { baseUrl: options.baseUrl }
+        : {}),
+      model,
+      log,
+    });
 
   async function verdict(
     system: string,
@@ -167,21 +139,48 @@ export function createLiveJudge(options: LiveJudgeOptions): Judge {
     positiveLabel: string,
     negativeLabel: string,
   ): Promise<boolean> {
-    const completion: unknown = await client.chat.completions.create({
-      model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      tools: [tool],
-      tool_choice: { type: "function", function: { name: tool.function.name } },
-      temperature: 0,
-    });
-    return parseVerdictArguments(
-      firstForcedVerdictArguments(completion),
-      positiveLabel,
-      negativeLabel,
-    );
+    const attempt = async (prompt: string): Promise<boolean> => {
+      log.debug(`      judge: posting verdict request (tool=${tool.function.name})`);
+      const t0 = Date.now();
+      const completion: unknown = await client.complete({
+        system,
+        user: prompt,
+        tools: [tool],
+        forceToolName: tool.function.name,
+        temperature: 0,
+        // Reasoning tokens precede tool arguments on this model (observed via
+        // reasoning_content); a generous cap keeps tiny verdicts from truncating.
+        maxTokens: 1_024,
+      });
+      log.debug(`      judge: response received in ${Date.now() - t0}ms`);
+      return parseVerdictArguments(
+        firstForcedToolArguments(completion),
+        positiveLabel,
+        negativeLabel,
+      );
+    };
+    try {
+      return await attempt(user);
+    } catch (error) {
+      // One self-healing retry, mirroring agnes-extract/agnes-check: a single
+      // malformed forced-tool response (model answers in prose, off-rubric
+      // verdict) must not kill a whole run. A second failure propagates with
+      // both problems attached.
+      const problem = error instanceof Error ? error.message : String(error);
+      log.info(`      judge: verdict invalid, retrying: ${problem}`);
+      const retryUser = [
+        user,
+        "",
+        `Your previous ${tool.function.name} call was rejected by validation: ${problem}`,
+        `Re-emit one corrected call with a "verdict" of ${positiveLabel} or ${negativeLabel}.`,
+      ].join("\n");
+      try {
+        return await attempt(retryUser);
+      } catch (retryError) {
+        const retryProblem = retryError instanceof Error ? retryError.message : String(retryError);
+        throw new Error(`judge verdict retry after "${problem}" also failed: ${retryProblem}`);
+      }
+    }
   }
 
   return {
@@ -205,3 +204,4 @@ export function createLiveJudge(options: LiveJudgeOptions): Judge {
     },
   };
 }
+

@@ -67,6 +67,35 @@ describe("runGenerationAxis — vacuous conventions for an unauthored beat set",
     expect(report.chapters).toEqual([]);
     expect(report.passed).toBe(true);
   });
+
+  it("carries deduped failure evidence on chapters whose runs were not clean", async () => {
+    const { chapters, beats } = await loadMiniBook();
+    const ignoringBeats: Generate = async (context) => ({
+      ordinal: context.throughOrdinal + 1,
+      text: "Nothing relevant happens.\n",
+    });
+    const flaggingCheck: Check = async () => ({
+      flags: [{ kind: "style", message: "canon clash on narration" }],
+    });
+
+    const report = await runGenerationAxis({
+      bookId: "mini-book",
+      chapters,
+      beats,
+      extract: fakeExtract,
+      generate: ignoringBeats,
+      check: flaggingCheck,
+      judge: createStubJudge({ defaultEquivalent: false }),
+    });
+
+    const [chapterReport] = report.chapters;
+    expect(chapterReport?.missedBeats.length).toBeGreaterThan(0);
+    expect(chapterReport?.flagMessages).toEqual(["style: canon clash on narration"]);
+
+    const text = formatGenerationTextReport(report).join("\n");
+    expect(text).toContain("missing beat:");
+    expect(text).toContain("flag: style: canon clash on narration");
+  });
 });
 
 describe("runGenerationAxis — distinguishing the two failure modes", () => {

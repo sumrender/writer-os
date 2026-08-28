@@ -1,0 +1,36 @@
+book: tom-sawyer
+# Beat declarations for the generation-fidelity axis (docs/TESTING.md §8).
+# Each entry is the per-chapter required and forbidden narrative events a
+# faithful generation of that chapter must satisfy. Chapters chosen to
+# exercise both must_include and must_not_include across distinct arcs.
+chapters:
+  - ordinal: 10
+    beats:
+      must_include:
+        - "Tom and Huck flee the graveyard"
+        - "the two boys swear a written blood oath of silence about what they saw"
+      must_not_include:
+        - "Tom reports the murder to the sheriff or any town authority"
+
+  - ordinal: 17
+    beats:
+      must_include:
+        - "Tom and Huck return during their own funeral service and are discovered alive"
+      must_not_include:
+        - "Aunt Polly reveals she always knew the boys were safe on the island"
+
+  - ordinal: 23
+    beats:
+      must_include:
+        - "Tom takes the stand at Muff Potter's trial and recounts the graveyard murder truthfully"
+        - "Injun Joe escapes through the courtroom window mid-testimony"
+      must_not_include:
+        - "Muff Potter is convicted once Tom's testimony is heard"
+
+  - ordinal: 34
+    beats:
+      must_include:
+        - "the treasure is counted out as twelve thousand dollars"
+        - "Tom and Huck divide the gold equally"
+      must_not_include:
+        - "Judge Thatcher keeps the children's share of the treasure for himself"

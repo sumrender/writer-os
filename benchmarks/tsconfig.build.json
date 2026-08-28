@@ -3,6 +3,10 @@
   "compilerOptions": {
     "noEmit": false,
     "allowImportingTsExtensions": false,
+    // Emit declarations alongside JS: scripts/probe-*.ts are typechecked
+    // against dist/ imports (node cannot resolve .js -> ./.ts at runtime),
+    // so declaration-less output would make pnpm typecheck fail.
+    "declaration": true,
     "outDir": "dist",
     "rootDir": "src"
   },

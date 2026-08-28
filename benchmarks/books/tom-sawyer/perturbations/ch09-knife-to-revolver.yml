@@ -1,0 +1,11 @@
+kind: perturbation
+id: ch09-knife-to-revolver
+base_ordinal: 9
+file: perturbations/ch09-edited-knife-to-revolver.txt
+edits:
+  - description: >-
+      Injun Joe's graveyard weapon replaced with a polished revolver,
+      contradicting the item he actually carried (a knife) and mirroring the
+      §7 suggested edit-type.
+violates: [item-injun-gun-not-revolver]
+expect: flag

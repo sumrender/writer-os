@@ -43,7 +43,7 @@ describe("runCheckerCases", () => {
         return { flags: [] };
       },
     );
-    expect(results).toEqual([{ caseId: "control-1", raised: false }]);
+    expect(results).toEqual([{ caseId: "control-1", raised: false, flags: [] }]);
   });
 
   it("checks base_ordinal N against the snapshot after chapter N-1", async () => {
@@ -60,7 +60,9 @@ describe("runCheckerCases", () => {
       flaggingCheck,
     );
 
-    expect(results).toEqual([{ caseId: "case-2", raised: true }]);
+    expect(results).toEqual([
+      { caseId: "case-2", raised: true, flags: ["holder mismatch"] },
+    ]);
   });
 
   it("throws precisely when a required snapshot is missing", async () => {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { AgnesClient } from "./agnes-client.js";
 import {
   EQUIVALENCE_TOOL,
+  JUDGE_MODEL,
   SUPPORT_TOOL,
   createLiveJudge,
   equivalenceSystemPrompt,
@@ -68,5 +70,76 @@ describe("parseVerdictArguments", () => {
 describe("createLiveJudge", () => {
   it("refuses to construct without an API key", () => {
     expect(() => createLiveJudge({ apiKey: "" })).toThrow(/api key/i);
+  });
+});
+
+describe("live judge verdict transport", () => {
+  const toolCallResponse = (args: string): unknown => ({
+    choices: [{ message: { tool_calls: [{ function: { arguments: args } }] } }],
+  });
+  const textOnlyResponse: unknown = {
+    choices: [{ message: { content: "Let me think about that…" } }],
+  };
+
+  interface StubClient {
+    readonly client: AgnesClient;
+    calls(): number;
+  }
+
+  /** Client that replays scripted responses, repeating the last one forever. */
+  function stubClient(responses: readonly unknown[]): StubClient {
+    let count = 0;
+    return {
+      client: {
+        model: JUDGE_MODEL,
+        async complete() {
+          const last = responses.length - 1;
+          const index = Math.min(count, last);
+          count++;
+          const response = responses[index];
+          if (response === undefined) throw new Error("stub ran out of scripted responses");
+          return response;
+        },
+      },
+      calls: () => count,
+    };
+  }
+
+  it("retries once when the model answers without the forced tool call", async () => {
+    const { client, calls } = stubClient([
+      textOnlyResponse,
+      toolCallResponse('{"verdict":"equivalent"}'),
+    ]);
+    const judge = createLiveJudge({ client });
+    await expect(judge.areEquivalent({ left: "aunt", right: "aunt Polly" })).resolves.toBe(true);
+    expect(calls()).toBe(2);
+  });
+
+  it("propagates with both problems attached when the retry also fails", async () => {
+    const { client, calls } = stubClient([textOnlyResponse, textOnlyResponse]);
+    const judge = createLiveJudge({ client });
+    await expect(
+      judge.areEquivalent({ left: "aunt", right: "aunt Polly" }),
+    ).rejects.toThrow(/forced tool call[\s\S]*also failed|also failed[\s\S]*forced tool call/);
+    expect(calls()).toBe(2);
+  });
+
+  it("does not re-ask when the first response is a valid verdict", async () => {
+    const { client, calls } = stubClient([toolCallResponse('{"verdict":"not_equivalent"}')]);
+    const judge = createLiveJudge({ client });
+    await expect(judge.areEquivalent({ left: "aunt", right: "neighbor" })).resolves.toBe(false);
+    expect(calls()).toBe(1);
+  });
+
+  it("applies the same retry to source-support verdicts", async () => {
+    const { client, calls } = stubClient([
+      toolCallResponse('{"verdict":"maybe"}'),
+      toolCallResponse('{"verdict":"supported"}'),
+    ]);
+    const judge = createLiveJudge({ client });
+    await expect(
+      judge.isSupportedBySource({ fact: "Tom lives with Aunt Polly", sourceText: "[chapter 1]" }),
+    ).resolves.toBe(true);
+    expect(calls()).toBe(2);
   });
 });

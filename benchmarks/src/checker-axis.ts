@@ -33,6 +33,11 @@ export interface CheckerCaseReport {
   readonly expected: "flag" | "no_flags";
   /** Fraction of runs in which this case's checker call raised a flag. */
   readonly raisedRate: Stats;
+  /**
+   * Deduped flag messages observed across all runs, in first-seen order —
+   * without them an unexpected flag is undiagnosable from the report alone.
+   */
+  readonly flagMessages: readonly string[];
 }
 
 export interface CheckerAxisReport {
@@ -60,6 +65,7 @@ export async function runCheckerAxis(input: CheckerAxisInput): Promise<CheckerAx
   const controlCases = input.cases.filter((c) => c.entry.kind === "control");
 
   const raisedByCase = new Map<string, boolean[]>(input.cases.map((c) => [c.entry.id, []]));
+  const flagsByCase = new Map<string, string[]>(input.cases.map((c) => [c.entry.id, []]));
   const catchRatePerRun: number[] = [];
   const fpRatePerRun: number[] = [];
 
@@ -67,6 +73,10 @@ export async function runCheckerAxis(input: CheckerAxisInput): Promise<CheckerAx
     const snapshots = await runExtraction(input.chapters, input.extract);
     const results = await runCheckerCases(input.cases, snapshots, input.check);
     const raisedByCaseId = new Map(results.map((r) => [r.caseId, r.raised]));
+
+    for (const { caseId, flags } of results) {
+      flagsByCase.get(caseId)?.push(...flags);
+    }
 
     for (const [caseId, history] of raisedByCase) {
       history.push(raisedByCaseId.get(caseId) ?? false);
@@ -88,6 +98,7 @@ export async function runCheckerAxis(input: CheckerAxisInput): Promise<CheckerAx
     kind: entry.kind,
     expected: entry.expect,
     raisedRate: statsOf((raisedByCase.get(entry.id) ?? []).map((raised) => (raised ? 1 : 0))),
+    flagMessages: [...new Set(flagsByCase.get(entry.id) ?? [])],
   }));
 
   const perturbationCatchRate = statsOf(catchRatePerRun);

@@ -1,5 +1,6 @@
 import type { BibleState } from "./bible.js";
 import { bibleFacts, type Fact } from "./fact-text.js";
+import { silentLogger, type Logger } from "./logger.js";
 
 /**
  * Open-world sweep (docs/TESTING.md §6): every generated fact no positive
@@ -37,12 +38,16 @@ export async function sweepUnmatchedFacts(
   claimedKeys: ReadonlySet<string>,
   sourceText: string,
   checker: SupportChecker,
+  log: Logger = silentLogger,
 ): Promise<SweepResult> {
   const unmatched = bibleFacts(state).filter((fact) => !claimedKeys.has(fact.key));
+  log.debug(`    sweep: ${unmatched.length} fact(s) to check (${claimedKeys.size} already claimed)`);
   const findings: SweepFinding[] = [];
 
   for (const fact of unmatched) {
+    log.debug(`      sweep fact: "${fact.text.slice(0, 80)}"`);
     const supported = await checker.isSupportedBySource({ fact: fact.text, sourceText });
+    log.debug(`        → ${supported ? "supported" : "unsupported"}`);
     findings.push({ fact, supported });
   }
 

@@ -1,5 +1,6 @@
 import type { EquivalenceRequest, Judge, SourceSupportRequest } from "./judge.js";
 import { hashVerdictInput, type VerdictCache } from "./verdict-cache.js";
+import { silentLogger, type Logger } from "./logger.js";
 
 /**
  * Decorator making any Judge cache-backed: identical inputs (op + request)
@@ -9,10 +10,12 @@ import { hashVerdictInput, type VerdictCache } from "./verdict-cache.js";
 export class CachingJudge implements Judge {
   readonly #inner: Judge;
   readonly #cache: VerdictCache;
+  readonly #log: Logger;
 
-  constructor(inner: Judge, cache: VerdictCache) {
+  constructor(inner: Judge, cache: VerdictCache, log: Logger = silentLogger) {
     this.#inner = inner;
     this.#cache = cache;
+    this.#log = log;
   }
 
   async areEquivalent(request: EquivalenceRequest): Promise<boolean> {
@@ -32,8 +35,17 @@ export class CachingJudge implements Judge {
   ): Promise<boolean> {
     const key = hashVerdictInput(operation, request);
     const cached = this.#cache.get(key);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      this.#log.debug(
+        `      judge cache HIT (${operation}) → ${cached} (key ${key.slice(0, 12)}…)`,
+      );
+      return cached;
+    }
+    this.#log.debug(
+      `      judge cache MISS (${operation}); calling inner judge (key ${key.slice(0, 12)}…)`,
+    );
     const verdict = await fetchVerdict();
+    this.#log.debug(`      judge verdict: ${verdict}`);
     this.#cache.set(key, verdict);
     return verdict;
   }

@@ -1,0 +1,457 @@
+book: tom-sawyer
+# Hand-authored ground truth for The Adventures of Tom Sawyer (Project
+# Gutenberg #74). Every `must` cites the chapters establishing the fact;
+# every `must_not` is a negative probe guarding a plausible extraction
+# confusion (see docs/TESTING.md §5 authoring rules). Evidence ordinals
+# were verified against benchmarks/books/tom-sawyer/source/.
+assertions:
+  # --- character ---
+  - id: char-tom
+    kind: character
+    expect: must
+    name: Tom Sawyer
+    evidence: [1]
+
+  - id: char-huck
+    kind: character
+    expect: must
+    name: Huckleberry Finn
+    evidence: [6]
+
+  - id: char-aunt-polly
+    kind: character
+    expect: must
+    name: Aunt Polly
+    evidence: [1]
+
+  - id: char-sid
+    kind: character
+    expect: must
+    name: Sid
+    evidence: [1]
+
+  - id: char-mary
+    kind: character
+    expect: must
+    name: Mary
+    evidence: [3]
+
+  - id: char-becky
+    kind: character
+    expect: must
+    name: Becky Thatcher
+    evidence: [6]
+
+  - id: char-injun-joe
+    kind: character
+    expect: must
+    name: Injun Joe
+    evidence: [9]
+
+  - id: char-muff-potter
+    kind: character
+    expect: must
+    name: Muff Potter
+    evidence: [9]
+
+  - id: char-judge-thatcher
+    kind: character
+    expect: must
+    name: Judge Thatcher
+    evidence: [29]
+
+  - id: char-widow-douglas
+    kind: character
+    expect: must
+    name: Widow Douglas
+    evidence: [29]
+
+  # --- appearance ---
+  - id: app-tom-fence-whitewash
+    kind: appearance
+    expect: must
+    character: Tom Sawyer
+    attribute: typical clothing
+    contains: "boy's country clothes"
+    evidence: [1, 8]
+
+  - id: app-tom-sunday
+    kind: appearance
+    expect: must
+    character: Tom Sawyer
+    attribute: church attire
+    contains: Sunday clothes
+    evidence: [4]
+
+  - id: app-huck-rags
+    kind: appearance
+    expect: must
+    character: Huckleberry Finn
+    attribute: everyday clothing
+    contains: rags
+    evidence: [6]
+
+  - id: app-becky-hair
+    kind: appearance
+    expect: must
+    character: Becky Thatcher
+    attribute: her hair
+    contains: hair
+    evidence: [6]
+
+  - id: app-polly-shade
+    kind: appearance
+    expect: must
+    character: Aunt Polly
+    attribute: her sewing glasses
+    contains: spectacles
+    evidence: [1]
+
+  - id: app-not-costume
+    kind: appearance
+    expect: must_not
+    character: Tom Sawyer
+    attribute: typical clothing
+    contains: uniform
+    evidence: [1]
+    note: No military or institutional uniform belongs to Tom anywhere; such an
+      extraction is decoration invented outside the source.
+
+  # --- relationship ---
+  - id: rel-polly-tom-aunt
+    kind: relationship
+    expect: must
+    from: Aunt Polly
+    to: Tom Sawyer
+    type: aunt
+    evidence: [1]
+
+  - id: rel-polly-tom-not-mother
+    kind: relationship
+    expect: must_not
+    from: Aunt Polly
+    to: Tom Sawyer
+    type: mother
+    evidence: [1]
+    note: Guardianship ≠ maternity; common extraction error.
+
+  - id: rel-sid-tom-half-brother
+    kind: relationship
+    expect: must
+    from: Sid
+    to: Tom Sawyer
+    type: half-brother
+    evidence: [1]
+
+  - id: rel-sid-tom-not-full-brother
+    kind: relationship
+    expect: must_not
+    from: Sid
+    to: Tom Sawyer
+    type: full brother
+    evidence: [1]
+    note: Text says Sid is Tom's HALF-brother; upgrading to full sibling is a
+      precision loss the bible must not make.
+
+  - id: rel-mary-tom-cousin
+    kind: relationship
+    expect: must
+    from: Mary
+    to: Tom Sawyer
+    type: cousin
+    evidence: [3]
+
+  - id: rel-becky-tom-sweetheart
+    kind: relationship
+    expect: must
+    from: Becky Thatcher
+    to: Tom Sawyer
+    type: sweetheart
+    evidence: [6]
+
+  - id: rel-huck-tom-friend
+    kind: relationship
+    expect: must
+    from: Huckleberry Finn
+    to: Tom Sawyer
+    type: bosom friend
+    evidence: [6]
+
+  - id: rel-injun-doctor-murderer
+    kind: relationship
+    expect: must
+    from: Injun Joe
+    to: Doctor Robinson
+    type: murderer of
+    evidence: [9]
+
+  - id: rel-muff-doctor-not-murderer
+    kind: relationship
+    expect: must_not
+    from: Muff Potter
+    to: Doctor Robinson
+    type: murderer of
+    evidence: [9]
+    note: Muff was framed; the townsfolk misattributed the killing, and an
+      extractor echoing the mob's belief is a fabrication trigger.
+
+  - id: rel-judge-becky-father
+    kind: relationship
+    expect: must
+    from: Judge Thatcher
+    to: Becky Thatcher
+    type: father of
+    evidence: [29]
+
+  - id: rel-widow-huck-guardian
+    kind: relationship
+    expect: must
+    from: Widow Douglas
+    to: Huckleberry Finn
+    type: guardian of
+    evidence: [35]
+
+  - id: rel-huck-widow-ward
+    kind: relationship
+    expect: must
+    from: Huckleberry Finn
+    to: Widow Douglas
+    type: ward of
+    evidence: [35]
+
+  # --- item ---
+  - id: item-treasure-holder
+    kind: item
+    expect: must
+    item: "the treasure ($12,000 in gold)"
+    holder: Tom and Huck, jointly
+    as_of: 35
+    evidence: [34, 35]
+
+  - id: item-dead-cat
+    kind: item
+    expect: must
+    item: the dead cat (wart cure)
+    holder: Huckleberry Finn
+    evidence: [6]
+
+  - id: item-whitewash-earnings
+    kind: item
+    expect: must
+    item: marbles and trinkets paid for the privilege of whitewashing
+    holder: Tom Sawyer
+    evidence: [2]
+
+  - id: item-apple-payment
+    kind: item
+    expect: must
+    item: an apple (Ben Rogers's whitewashing fee)
+    holder: Tom Sawyer
+    evidence: [2]
+
+  - id: item-injun-gun-not-revolver
+    kind: item
+    expect: must_not
+    item: Injun Joe's revolver
+    holder: Injun Joe
+    evidence: [9]
+    note: At the graveyard he wields a knife, not a firearm; guards the §7
+      edit-type and its mirrored extraction error.
+
+  - id: item-treasure-not-injun-joe
+    kind: item
+    expect: must_not
+    item: "the treasure ($12,000 in gold)"
+    holder: Injun Joe
+    as_of: 35
+    evidence: [26, 34]
+    note: The gold is recovered after Injun Joe dies sealed in the cave; a
+      post-mortem holder attribution is fabrication.
+
+  # --- thread ---
+  - id: thread-injun-joe-menace
+    kind: thread
+    expect: must
+    thread: Injun Joe as lurking menace
+    status: resolved
+    as_of: 33
+    evidence: [9, 25, 32, 33]
+
+  - id: thread-muff-injustice
+    kind: thread
+    expect: must
+    thread: Muff Potter wrongly charged with murder
+    status: resolved
+    as_of: 24
+    evidence: [9, 11, 23, 24]
+
+  - id: thread-runaway-excursion
+    kind: thread
+    expect: must
+    thread: the boys reported drowned after running away to Jackson's Island
+    status: resolved
+    as_of: 18
+    evidence: [13, 17]
+
+  - id: thread-treasure-hunt
+    kind: thread
+    expect: must
+    thread: the search for Injun Joe's buried treasure
+    status: resolved
+    as_of: 34
+    evidence: [25, 26, 34]
+
+  - id: thread-menace-stale-open
+    kind: thread
+    expect: must_not
+    thread: Injun Joe as lurking menace
+    status: open
+    as_of: 35
+    evidence: [33, 35]
+    note: After his death the menace cannot persist; probes stale status state.
+
+  # --- world_rule ---
+  - id: rule-no-supernatural-system
+    kind: world_rule
+    expect: must_not
+    topic: any supernatural / magic system
+    note: Realist fiction — any extracted magic system is fabrication.
+
+  - id: rule-folk-belief-system
+    kind: world_rule
+    expect: must
+    topic: the town's faith in omens and folk remedies such as the dead-cat wart cure
+    evidence: [6]
+
+  # --- timeline ---
+  - id: order-fence-before-cave
+    kind: timeline
+    expect: must
+    sequence: ["whitewashing the fence", "lost in McDougal's cave"]
+    evidence: [2, 31]
+
+  - id: order-graveyard-before-oath
+    kind: timeline
+    expect: must
+    sequence: ["the graveyard murder", "Tom and Huck swear the blood oath"]
+    evidence: [9, 10]
+
+  - id: order-oath-before-runaway
+    kind: timeline
+    expect: must
+    sequence: ["Tom and Huck swear the blood oath", "the boys run away to Jackson's Island"]
+    evidence: [10, 13]
+
+  - id: order-runaway-before-funeral
+    kind: timeline
+    expect: must
+    sequence: ["the boys run away to Jackson's Island", "the boys attend their own funeral"]
+    evidence: [13, 17]
+
+  - id: order-trial-before-treasure
+    kind: timeline
+    expect: must
+    sequence: ["Tom testifies at Muff Potter's trial", "the $12,000 treasure is divided"]
+    evidence: [23, 34]
+
+  # --- lexicon ---
+  - id: lex-tom-sawyer
+    kind: lexicon
+    expect: must
+    term: Tom Sawyer
+    locked_spelling: true
+    evidence: [1]
+
+  - id: lex-aunt-polly
+    kind: lexicon
+    expect: must
+    term: Aunt Polly
+    locked_spelling: true
+    evidence: [1]
+
+  - id: lex-sid
+    kind: lexicon
+    expect: must
+    term: Sid
+    locked_spelling: true
+    evidence: [1]
+
+  - id: lex-injun-joe
+    kind: lexicon
+    expect: must
+    term: Injun Joe
+    locked_spelling: true
+    evidence: [9]
+
+  - id: lex-muff-potter
+    kind: lexicon
+    expect: must
+    term: Muff Potter
+    locked_spelling: true
+    evidence: [9]
+
+  - id: lex-becky
+    kind: lexicon
+    expect: must
+    term: Becky
+    locked_spelling: true
+    evidence: [6]
+
+  - id: lex-widow-douglas
+    kind: lexicon
+    expect: must
+    term: Widow Douglas
+    locked_spelling: true
+    evidence: [29]
+
+  - id: lex-judge-thatcher
+    kind: lexicon
+    expect: must
+    term: Judge Thatcher
+    locked_spelling: true
+    evidence: [29]
+
+  - id: lex-mcdougal
+    kind: lexicon
+    expect: must
+    term: McDougal's Cave
+    locked_spelling: true
+    evidence: [31]
+
+  - id: lex-indian-joe-normalization
+    kind: lexicon
+    expect: must_not
+    term: Indian Joe
+    locked_spelling: false
+    evidence: [9]
+    note: Common normalization drift; the source locks the spelling "Injun Joe".
+
+  # --- style ---
+  - id: style-narration
+    kind: style
+    expect: must
+    field: pov_and_tense
+    value: third-person omniscient, past tense
+    evidence: [1]
+
+  - id: style-dialect
+    kind: style
+    expect: must
+    field: dialogue_register
+    value: regional Missouri dialect in dialogue, strongest in Huck's speech
+    evidence: [6]
+
+  - id: style-tone
+    kind: style
+    expect: must
+    field: tone
+    value: mischievous satire of small-town respectability
+    evidence: [2]
+
+  - id: style-setting-register
+    kind: style
+    expect: must
+    field: period_register
+    value: 1840s Mississippi river-town vocabulary and manners
+    evidence: [13]
+

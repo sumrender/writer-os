@@ -76,10 +76,13 @@ function run(
   io: CliIo & Output,
   extra: { judgeCachePath?: string; env?: Record<string, string> } = {},
 ): Promise<number> {
+  // Offline e2e suite pins the deterministic fake pipeline explicitly; the
+  // CLI default is live (credential-gated) which these runs must never hit.
+  const fullArgv = argv.includes("--pipeline") ? argv : [...argv, "--pipeline", "fake"];
   const previousKey = process.env.AGNES_API_KEY;
   delete process.env.AGNES_API_KEY;
   if (extra.env?.AGNES_API_KEY !== undefined) process.env.AGNES_API_KEY = extra.env.AGNES_API_KEY;
-  return runCli(argv, io, {
+  return runCli(fullArgv, io, {
     booksRoot: root,
     judgeCachePath: extra.judgeCachePath ?? join(root, "cache.json"),
   }).finally(() => {
@@ -432,5 +435,69 @@ describe("runCli — generation axis end-to-end (offline)", () => {
       run(["run", "--book", "mini-book", "--axis", "generation"], io),
     ).resolves.toBe(EXIT_VALIDATION_FAILED);
     expect(io.err.join("\n")).toContain("beats.yml");
+  });
+});
+
+describe("runCli — pipeline selection (default live)", () => {
+  it("defaults to the live pipeline and demands credentials when none exist", async () => {
+    installMiniBook();
+    const io = capture();
+    await expect(
+      runCli(["run", "--book", "mini-book", "--axis", "extraction"], io, {
+        booksRoot: root,
+        judgeCachePath: join(root, "cache.json"),
+      }),
+    ).resolves.toBe(EXIT_USAGE);
+    expect(io.err.join("\n")).toMatch(/AGNES_API_KEY/i);
+  });
+
+  it("rejects an unknown --pipeline value as a usage error", async () => {
+    installMiniBook();
+    const io = capture();
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "extraction", "--pipeline", "oracle"], io),
+    ).resolves.toBe(EXIT_USAGE);
+    expect(io.err.join("\n")).toContain("--pipeline");
+  });
+
+  it("runs fully offline with --pipeline fake even without credentials", async () => {
+    installMiniBook();
+    const io = capture();
+    await expect(run(["run", "--book", "mini-book", "--axis", "extraction"], io)).resolves.toBe(
+      EXIT_OK,
+    );
+    expect(io.out.join("\n")).toContain("extraction — mini-book");
+  });
+});
+
+describe("runCli — --cache flag (default true)", () => {
+  it("always announces cache ENABLED by default, before the report", async () => {
+    installMiniBook();
+    const io = capture();
+    await expect(run(["run", "--book", "mini-book", "--axis", "extraction"], io)).resolves.toBe(
+      EXIT_OK,
+    );
+    const out = io.out.join("\n");
+    expect(out).toContain("cache: ENABLED");
+    expect(out.indexOf("cache: ENABLED")).toBeLessThan(out.indexOf("extraction — mini-book"));
+  });
+
+  it("announces cache DISABLED on --cache false and still runs offline", async () => {
+    installMiniBook();
+    const io = capture();
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "extraction", "--cache", "false"], io),
+    ).resolves.toBe(EXIT_OK);
+    expect(io.out.join("\n")).toContain("cache: DISABLED");
+    expect(io.out.join("\n")).toContain("nothing persists");
+  });
+
+  it("rejects values other than true/false as a usage error", async () => {
+    installMiniBook();
+    const io = capture();
+    await expect(
+      run(["run", "--book", "mini-book", "--axis", "extraction", "--cache", "maybe"], io),
+    ).resolves.toBe(EXIT_USAGE);
+    expect(io.err.join("\n")).toContain("--cache");
   });
 });

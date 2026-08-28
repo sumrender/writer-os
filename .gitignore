@@ -1,3 +1,5 @@
 benchmarks/node_modules/
 benchmarks/dist/
 benchmarks/results/
+benchmarks/.env
+

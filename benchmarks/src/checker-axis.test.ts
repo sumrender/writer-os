@@ -116,6 +116,25 @@ describe("runCheckerAxis — grading a checker that misbehaves", () => {
     expect(report.controlFalsePositiveRate.mean).toBe(1);
     expect(report.passed).toBe(false);
   });
+
+  it("carries the raised flag text into the report for diagnosis", async () => {
+    const { chapters, cases } = await loadMiniBook();
+    const trigger: Check = async () => ({
+      flags: [{ kind: "thread", message: "canon says open; text says closed" }],
+    });
+
+    const report = await runCheckerAxis({
+      bookId: "mini-book",
+      chapters,
+      cases,
+      extract: fakeExtract,
+      check: trigger,
+    });
+
+    for (const entry of report.cases) {
+      expect(entry.flagMessages).toEqual(["canon says open; text says closed"]);
+    }
+  });
 });
 
 describe("runCheckerAxis — protocol guards", () => {
@@ -181,6 +200,23 @@ describe("report formatting", () => {
 
     const text = formatCheckerTextReport(report).join("\n");
     expect(text).toContain("no perturbation or control cases authored");
+  });
+
+  it("prints the offending flag text beneath any deviating case", async () => {
+    const { chapters, cases } = await loadMiniBook();
+    const report = await runCheckerAxis({
+      bookId: "mini-book",
+      chapters,
+      cases,
+      extract: fakeExtract,
+      // Every call flags everything: clean controls become false positives.
+      check: async () => ({ flags: [{ kind: "item", message: "canon clash: holder" }] }),
+    });
+
+    const text = formatCheckerTextReport(report).join("\n");
+
+    expect(text).toContain("control false-positive rate 1.000");
+    expect(text).toContain("flag: canon clash: holder");
   });
 
   it("serializes the structured report as JSON", async () => {
