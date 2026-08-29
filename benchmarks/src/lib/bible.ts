@@ -88,3 +88,18 @@ export function emptyBible(): BibleState {
     style: [],
   };
 }
+
+/** Total Canon entries held by a bible state — the Story Bible's size. */
+export function canonEntryCount(bible: BibleState): number {
+  return (
+    bible.characters.length +
+    bible.appearances.length +
+    bible.relationships.length +
+    bible.items.length +
+    bible.threads.length +
+    bible.worldRules.length +
+    bible.timeline.length +
+    bible.lexicon.length +
+    bible.style.length
+  );
+}

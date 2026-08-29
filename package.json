@@ -1,0 +1,14 @@
+{
+  "name": "writer-os",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:cli": "pnpm --filter @writer-os/benchmark build",
+    "dev": "pnpm build:cli && pnpm --filter @writer-os/benchmark-ui dev",
+    "typecheck": "pnpm build:cli && pnpm -r typecheck",
+    "test": "pnpm build:cli && pnpm -r test"
+  }
+}

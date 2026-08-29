@@ -1,0 +1,6 @@
+packages:
+  - "benchmarks"
+  - "ui"
+
+onlyBuiltDependencies:
+  - esbuild

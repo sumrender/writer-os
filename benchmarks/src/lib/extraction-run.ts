@@ -1,4 +1,4 @@
-import { emptyBible, type BibleState } from "./bible.js";
+import { canonEntryCount, emptyBible, type BibleState } from "./bible.js";
 import type { ExtractableChapter } from "./manifest.js";
 import type { Extract } from "./pipeline.js";
 import { silentLogger, type Logger } from "./logger.js";
@@ -6,6 +6,16 @@ import { silentLogger, type Logger } from "./logger.js";
 export interface ExtractionSnapshot {
   readonly afterOrdinal: number;
   readonly bible: BibleState;
+}
+
+/** Per-chapter progress hook the extraction loop calls around each extract. */
+export interface ExtractionProgress {
+  onChapterStart?(ordinal: number): void;
+  onChapterComplete?(info: {
+    ordinal: number;
+    elapsedMs: number;
+    bible: BibleState;
+  }): void;
 }
 
 /**
@@ -28,21 +38,24 @@ export async function runExtraction(
   chapters: readonly ExtractableChapter[],
   extract: Extract,
   log: Logger = silentLogger,
+  progress?: ExtractionProgress,
 ): Promise<ExtractionSnapshot[]> {
   const snapshots: ExtractionSnapshot[] = [];
   let state: BibleState = emptyBible();
 
   for (const chapter of [...chapters].sort((a, b) => a.ordinal - b.ordinal)) {
     log.info(
-      `  chapter ${chapter.ordinal}: extracting (${chapter.text.length} chars, ${state.characters.length + state.appearances.length + state.relationships.length + state.items.length + state.threads.length + state.worldRules.length + state.timeline.length + state.lexicon.length + state.style.length} canon entries carried)`,
+      `  chapter ${chapter.ordinal}: extracting (${chapter.text.length} chars, ${canonEntryCount(state)} canon entries carried)`,
     );
+    progress?.onChapterStart?.(chapter.ordinal);
     const t0 = Date.now();
     state = await extract(chapter.text, chapter.ordinal, state);
     const elapsed = Date.now() - t0;
-    const totals = state.characters.length + state.appearances.length + state.relationships.length + state.items.length + state.threads.length + state.worldRules.length + state.timeline.length + state.lexicon.length + state.style.length;
+    const totals = canonEntryCount(state);
     log.info(
       `  chapter ${chapter.ordinal}: extracted in ${elapsed}ms (${totals} canon entries total)`,
     );
+    progress?.onChapterComplete?.({ ordinal: chapter.ordinal, elapsedMs: elapsed, bible: state });
     snapshots.push({ afterOrdinal: chapter.ordinal, bible: state });
   }
 

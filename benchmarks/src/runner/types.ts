@@ -17,13 +17,18 @@ export const EXIT_USAGE = 2;
 export const EXIT_NOT_IMPLEMENTED = 3;
 export const EXIT_GATE_FAILED = 4;
 
+/** The single mapping from a passing report to its process exit code. */
+export function exitCodeForPassed(passed: boolean): number {
+  return passed ? EXIT_OK : EXIT_GATE_FAILED;
+}
+
 export const AXES = ["extraction", "checker", "generation"] as const;
 export type Axis = (typeof AXES)[number];
 
 export const JUDGES = ["stub", "live"] as const;
 export type JudgeKind = (typeof JUDGES)[number];
 
-export const FORMATS = ["text", "json"] as const;
+export const FORMATS = ["text", "json", "events"] as const;
 export type Format = (typeof FORMATS)[number];
 
 export const PIPELINES = ["live", "fake"] as const;

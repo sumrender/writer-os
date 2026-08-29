@@ -1,9 +1,9 @@
-import { ENTITY_KINDS, type EntityKind } from "../../lib/bible.js";
+import { canonEntryCount, emptyBible, ENTITY_KINDS, type EntityKind } from "../../lib/bible.js";
 import type { AssertionSet } from "../../lib/assertions.js";
 import type { ExtractableChapter } from "../../lib/manifest.js";
 import type { Extract } from "../../lib/pipeline.js";
 import type { Judge } from "../../lib/judge.js";
-import { runExtraction } from "../../lib/extraction-run.js";
+import { runExtraction, type ExtractionSnapshot } from "../../lib/extraction-run.js";
 import { gradeAssertionSet, type GradedAssertion } from "../../lib/grader.js";
 import { bookSourceText, sweepUnmatchedFacts } from "../../lib/sweep.js";
 import { silentLogger, type Logger } from "../../lib/logger.js";
@@ -17,6 +17,8 @@ import {
   type Stats,
 } from "../../lib/metrics.js";
 import { evaluateGates, type GateConfig, type GateEvaluation } from "../../lib/gates.js";
+import { exitCodeForPassed } from "../types.js";
+import type { EventSink, ExtractionEvidenceLine } from "../events.js";
 
 /**
  * Extraction-axis run protocol (docs/TESTING.md §9): `runs` sequential
@@ -37,6 +39,8 @@ export interface ExtractionAxisInput {
   readonly runs?: number;
   /** Optional progress sink; defaults to silent. */
   readonly log?: Logger;
+  /** Optional NDJSON event observer for the `events` output format. */
+  readonly onEvent?: EventSink;
 }
 
 export interface KindReport {
@@ -67,6 +71,7 @@ export interface ExtractionAxisReport {
 
 export async function runExtractionAxis(input: ExtractionAxisInput): Promise<ExtractionAxisReport> {
   const log = input.log ?? silentLogger;
+  const emit = input.onEvent;
   const runs = input.runs ?? RUNS_PER_BOOK;
   if (!Number.isInteger(runs) || runs < 1) {
     throw new Error(`extraction axis requires at least one run (got ${input.runs})`);
@@ -74,6 +79,13 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
   log.info(
     `extraction axis: ${input.bookId} — ${runs} run(s), ${input.chapters.length} chapter(s), ${input.assertions.assertions.length} assertion(s)`,
   );
+  emit?.({
+    type: "run.started",
+    book: input.bookId,
+    axis: "extraction",
+    runs,
+    totalChapters: input.chapters.length,
+  });
 
   const sourceText = bookSourceText(
     input.chapters.map((chapter) => ({ ordinal: chapter.ordinal, text: chapter.text })),
@@ -83,10 +95,25 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
   const precisions: number[] = [];
   const sweptPerRun: number[] = [];
   const unsupportedPerRun: number[] = [];
+  const evidence: ExtractionEvidenceLine[] = [];
+  let finalSnapshots: readonly ExtractionSnapshot[] = [];
 
   for (let run = 0; run < runs; run++) {
+    const runIndex = run + 1;
     log.info(`run ${run + 1}/${runs}: extracting ${input.chapters.length} chapter(s)`);
-    const snapshots = await runExtraction(input.chapters, input.extract, log);
+    const snapshots = await runExtraction(input.chapters, input.extract, log, {
+      onChapterStart: (ordinal) => emit?.({ type: "chapter.started", ordinal, runIndex }),
+      onChapterComplete: ({ ordinal, elapsedMs, bible }) =>
+        emit?.({
+          type: "chapter.completed",
+          ordinal,
+          runIndex,
+          elapsedMs,
+          canonEntries: canonEntryCount(bible),
+          bible,
+        }),
+    });
+    finalSnapshots = snapshots;
     log.info(`run ${run + 1}/${runs}: grading ${input.assertions.assertions.length} assertion(s)`);
     const gradedExtraction = await gradeAssertionSet(
       input.assertions,
@@ -94,6 +121,19 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
       input.judge,
       log,
     );
+    for (const graded of gradedExtraction.graded) {
+      const verdict = graded.verdict;
+      if (verdict === "omission" || verdict === "fabrication") {
+        evidence.push({
+          runIndex,
+          assertionId: graded.assertionId,
+          kind: graded.kind,
+          expect: graded.expect,
+          gradedAtOrdinal: graded.gradedAtOrdinal,
+          verdict,
+        });
+      }
+    }
 
     const counts = countsByKind(gradedExtraction.graded);
     precisions.push(globalPrecision([...counts.values()]));
@@ -148,7 +188,7 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
     `extraction axis: gates ${gates.passed ? "PASS" : "FAIL"} (global precision ${(statsOf(precisions).mean).toFixed(3)})`,
   );
 
-  return {
+  const report: ExtractionAxisReport = {
     book: input.bookId,
     axis: "extraction",
     runs,
@@ -166,6 +206,17 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
     gates,
     passed: gates.passed,
   };
+
+  emit?.({
+    type: "run.completed",
+    exitCode: exitCodeForPassed(report.passed),
+    report,
+    bible: finalSnapshots.at(-1)?.bible ?? emptyBible(),
+    snapshots: finalSnapshots,
+    evidence,
+  });
+
+  return report;
 }
 
 /** Maps verdicts to the confusion-matrix counts the metrics consume,

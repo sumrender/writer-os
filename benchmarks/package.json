@@ -9,6 +9,12 @@
   "bin": {
     "bench": "./dist/runner/cli.js"
   },
+  "exports": {
+    "./events": {
+      "types": "./dist/runner/events.d.ts",
+      "default": "./dist/runner/events.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
@@ -25,10 +31,5 @@
     "@types/node": "^24.3.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }
