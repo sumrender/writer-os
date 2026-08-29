@@ -35,8 +35,13 @@ function initialFields(book: string): FormFields {
 function BenchmarkForm() {
   const { books, runs } = Route.useLoaderData();
   const navigate = useNavigate();
-  const enabledBook = books.books.find((b) => b.enabled) ?? books.books[0];
-  const [fields, setFields] = useState<FormFields>(() => initialFields(enabledBook?.id ?? ""));
+  // Default to the offline-first mini-book fixture; fall back to the first
+  // runnable book if it is somehow absent.
+  const defaultBook =
+    books.books.find((b) => b.id === DEFAULT_RUN_CONFIG.book && b.enabled) ??
+    books.books.find((b) => b.enabled) ??
+    books.books[0];
+  const [fields, setFields] = useState<FormFields>(() => initialFields(defaultBook?.id ?? ""));
   const [errors, setErrors] = useState<ConfigErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -81,7 +86,7 @@ function BenchmarkForm() {
             {books.books.map((book) => (
               <option key={book.id} value={book.id} disabled={!book.enabled}>
                 {book.title} ({book.chapters} chapters)
-                {book.enabled ? "" : " — later"}
+                {book.enabled ? "" : " — no assertion set yet"}
               </option>
             ))}
           </select>

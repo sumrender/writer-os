@@ -12,12 +12,16 @@ export interface BookSummary {
   readonly id: string;
   readonly title: string;
   readonly chapters: number;
-  /** v1 runs the mini-book only; other Fixture books are listed but disabled. */
+  /**
+   * Runnable in the UI: the fixture ships an assertion set, so the Extraction
+   * axis has ground truth to grade against. A book without one is listed but
+   * disabled until its assertions are authored.
+   */
   readonly enabled: boolean;
 }
 
-/** The only Fixture book the v1 UI enables. */
-export const V1_ENABLED_BOOK = "mini-book";
+/** The assertion file the Extraction axis grades against (assertion-file.ts). */
+const ASSERTIONS_FILE = "assertions.yml";
 
 interface ManifestShape {
   readonly title: string;
@@ -51,7 +55,7 @@ export function listBooks(booksRoot: string): BookSummary[] {
       id: entry,
       title: shape.title,
       chapters: shape.chapters,
-      enabled: entry === V1_ENABLED_BOOK,
+      enabled: existsSync(join(bookDir, ASSERTIONS_FILE)),
     });
   }
   return books;

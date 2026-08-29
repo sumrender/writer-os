@@ -45,11 +45,14 @@ export const startRun = createServerFn({ method: "POST" })
     if (config === null) {
       throw new Error(Object.values(errors).join(" ") || "Invalid run configuration.");
     }
-    // v1 enables only the mini-book fixture; the form disables the rest, but
-    // the server enforces it too so an invalid config never spawns a process.
+    // A book is runnable only when it ships an assertion set for the
+    // Extraction axis; the form disables the rest, but the server enforces it
+    // too so an invalid config never spawns a process.
     const book = listBooks(serverPaths.booksRoot).find((b) => b.id === config.book);
     if (book === undefined) throw new Error(`unknown Fixture book: ${config.book}`);
-    if (!book.enabled) throw new Error(`book "${config.book}" is not enabled in v1`);
+    if (!book.enabled) {
+      throw new Error(`book "${config.book}" has no assertion set to grade against yet`);
+    }
     return config;
   })
   .handler(({ data }): StartRunResult => {
