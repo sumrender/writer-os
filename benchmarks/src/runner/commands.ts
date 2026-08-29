@@ -109,7 +109,7 @@ export async function commandRun(
     return EXIT_USAGE;
   }
   // The NDJSON event stream is the extraction axis's protocol (chapter-level
-  // progress + Story Bible snapshots); checker/generation keep text/json.
+  // progress + Story Facts snapshots); checker/generation keep text/json.
   if (format === "events" && options.axis !== "extraction") {
     io.stderr(`--format events is only supported for the extraction axis (got: --axis ${options.axis})`);
     io.stderr(USAGE);

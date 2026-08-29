@@ -3,7 +3,7 @@ import {
   THREAD_STATUSES,
   type EntityKind,
   type ThreadStatus,
-} from "./bible.js";
+} from "./story-facts.js";
 import { isPlainObject, nonEmptyString, positiveInt, SLUG_PATTERN } from "./schema-primitives.js";
 
 /**

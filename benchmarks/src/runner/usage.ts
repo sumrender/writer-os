@@ -23,6 +23,6 @@ results/cache/; --cache false forces every call to reach the API fresh.
 info = phase + per-chapter + per-assertion progress; debug = + every API call,
 cache hit/miss, and retry. Both off by default at --log-level off.
 --format events (extraction axis only) streams one JSON event per line on
-stdout — run.started, chapter.started/chapter.completed (with the Story Bible
-snapshot per chapter), run.completed (report + final bible + snapshots), or
+stdout — run.started, chapter.started/chapter.completed (with the Story Facts
+snapshot per chapter), run.completed (report + final facts + snapshots), or
 run.failed — while all human logs stay on stderr.`;

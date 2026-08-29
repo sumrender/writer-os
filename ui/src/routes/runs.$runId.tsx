@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import type {
   BenchmarkEvent,
-  BibleState,
+  StoryFacts,
   ExtractionAxisReport,
   ExtractionEvidenceLine,
   ExtractionSnapshot,
 } from "@writer-os/benchmark/events";
 import { cancelRun, getRun } from "../server/functions.js";
 import { StatusBadge } from "../components/StatusBadge.js";
-import { StoryBible } from "../components/StoryBible.js";
+import { StoryFacts as StoryFactsViewer } from "../components/StoryFacts.js";
 import { ReportView } from "../components/ReportView.js";
 import { elapsed } from "../shared/format.js";
 
@@ -32,9 +32,9 @@ interface RunViewModel {
   readonly totalChapters: number | null;
   readonly runs: number | null;
   readonly chapters: ChapterRow[];
-  readonly liveBible: BibleState | null;
+  readonly liveFacts: StoryFacts | null;
   readonly report: ExtractionAxisReport | null;
-  readonly finalBible: BibleState | null;
+  readonly finalFacts: StoryFacts | null;
   readonly snapshots: readonly ExtractionSnapshot[];
   readonly evidence: readonly ExtractionEvidenceLine[];
   readonly failure: { exitCode: number; message: string } | null;
@@ -47,9 +47,9 @@ function reduceEvents(events: readonly BenchmarkEvent[]): RunViewModel {
     totalChapters: null,
     runs: null,
     chapters: [],
-    liveBible: null,
+    liveFacts: null,
     report: null,
-    finalBible: null,
+    finalFacts: null,
     snapshots: [],
     evidence: [],
     failure: null,
@@ -67,11 +67,11 @@ function reduceEvents(events: readonly BenchmarkEvent[]): RunViewModel {
           elapsedMs: event.elapsedMs,
           canonEntries: event.canonEntries,
         });
-        model.liveBible = event.bible;
+        model.liveFacts = event.facts;
         break;
       case "run.completed":
         model.report = event.report;
-        model.finalBible = event.bible;
+        model.finalFacts = event.facts;
         model.snapshots = event.snapshots;
         model.evidence = event.evidence;
         break;
@@ -137,7 +137,7 @@ function RunDetail() {
   if (missing) {
     return (
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-6 text-center">
-        <p className="text-sm text-zinc-300">Run “{runId}” was not found.</p>
+        <p className="text-sm text-zinc-300">Run "{runId}" was not found.</p>
         <Link to="/" className="mt-2 inline-block text-sm text-emerald-400 hover:underline">
           ← back to all runs
         </Link>
@@ -187,7 +187,7 @@ function RunDetail() {
 
       {model.report !== null && <ReportView report={model.report} evidence={model.evidence} />}
 
-      <BibleSection model={model} />
+      <FactsSection model={model} />
 
       <EventLog events={events} stderr={stderr} />
     </div>
@@ -254,22 +254,22 @@ function Progress({
   );
 }
 
-function BibleSection({ model }: { model: RunViewModel }) {
+function FactsSection({ model }: { model: RunViewModel }) {
   const options = useMemo(() => {
-    const list: Array<{ key: string; label: string; bible: BibleState }> = [];
+    const list: Array<{ key: string; label: string; facts: StoryFacts }> = [];
     for (const snapshot of model.snapshots) {
       list.push({
         key: `snap-${snapshot.afterOrdinal}`,
         label: `as of chapter ${snapshot.afterOrdinal}`,
-        bible: snapshot.bible,
+        facts: snapshot.facts,
       });
     }
-    if (model.snapshots.length === 0 && model.liveBible !== null) {
+    if (model.snapshots.length === 0 && model.liveFacts !== null) {
       const last = model.chapters[model.chapters.length - 1];
       list.push({
         key: "live",
         label: last ? `live · after chapter ${last.ordinal}` : "live",
-        bible: model.liveBible,
+        facts: model.liveFacts,
       });
     }
     return list;
@@ -282,7 +282,7 @@ function BibleSection({ model }: { model: RunViewModel }) {
   return (
     <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-zinc-200">Story Bible</h3>
+        <h3 className="text-sm font-semibold text-zinc-200">Story Facts</h3>
         {options.length > 1 && (
           <select
             className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm"
@@ -299,10 +299,10 @@ function BibleSection({ model }: { model: RunViewModel }) {
       </div>
       {active === null ? (
         <p className="text-sm text-zinc-500">
-          {model.report === null ? "Waiting for the first chapter…" : "No Story Bible produced."}
+          {model.report === null ? "Waiting for the first chapter…" : "No Story Facts produced."}
         </p>
       ) : (
-        <StoryBible bible={active.bible} />
+        <StoryFactsViewer facts={active.facts} />
       )}
     </section>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyBible } from "./bible.js";
+import { emptyStoryFacts } from "./story-facts.js";
 import type { AgnesClient, ChatCompletionRequest } from "./agnes-client.js";
 import { createAgnesExtract, parseExtractedFacts, parseExtractedFactsDetailed } from "./agnes-extract.js";
 import { MemoryResponseCache } from "./response-cache.js";
@@ -40,7 +40,7 @@ describe("createAgnesExtract", () => {
     ]);
     const extract = createAgnesExtract(client);
 
-    const afterCh1 = await extract("Mara held the compass.", 1, emptyBible());
+    const afterCh1 = await extract("Mara held the compass.", 1, emptyStoryFacts());
     expect(afterCh1.characters).toEqual([{ name: "Mara Vey" }]);
     expect(afterCh1.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
 
@@ -56,8 +56,8 @@ describe("createAgnesExtract", () => {
 
   it("returns canon untouched when the chapter establishes nothing", async () => {
     const { client } = scriptedClient([toolResponse([])]);
-    const state = await createAgnesExtract(client)("Nothing happened.", 1, emptyBible());
-    expect(state).toEqual(emptyBible());
+    const state = await createAgnesExtract(client)("Nothing happened.", 1, emptyStoryFacts());
+    expect(state).toEqual(emptyStoryFacts());
   });
 
   it("retries once with the validation error attached when the first response is malformed at batch level", async () => {
@@ -73,7 +73,7 @@ describe("createAgnesExtract", () => {
       malformedResponse,
       toolResponse([{ kind: "item", item: "brass compass", holder: "Mara Vey" }]),
     ]);
-    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyBible());
+    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyStoryFacts());
     expect(state.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
     expect(requests).toHaveLength(2);
     expect(String(requests[1]?.user)).toContain("rejected by validation");
@@ -90,7 +90,7 @@ describe("createAgnesExtract", () => {
       ]),
       { choices: [{ message: { tool_calls: [{ function: { arguments: "not json" } }] } }] },
     ]);
-    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyBible());
+    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyStoryFacts());
     expect(state.characters).toEqual([{ name: "Mara Vey" }]);
     expect(requests).toHaveLength(2);
     expect(String(requests[1]?.user)).toContain("rejected by validation");
@@ -107,7 +107,7 @@ describe("createAgnesExtract", () => {
         { kind: "item", item: "brass compass", holder: "Mara Vey" },
       ]),
     ]);
-    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyBible());
+    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyStoryFacts());
     expect(state.characters).toEqual([{ name: "Mara Vey" }]);
     expect(state.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
     expect(requests).toHaveLength(2);
@@ -122,7 +122,7 @@ describe("createAgnesExtract", () => {
       ]),
       toolResponse([{ kind: "wizards", name: "Mara Vey" }]),
     ]);
-    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyBible());
+    const state = await createAgnesExtract(client)("Mara held the compass.", 1, emptyStoryFacts());
     expect(state.characters).toEqual([{ name: "Mara Vey" }]);
     expect(requests).toHaveLength(2);
   });
@@ -131,7 +131,7 @@ describe("createAgnesExtract", () => {
     const { client, requests } = scriptedClient([
       toolResponse([{ kind: "character", name: "Mara Vey" }]),
     ]);
-    const state = await createAgnesExtract(client)("Mara appeared.", 1, emptyBible());
+    const state = await createAgnesExtract(client)("Mara appeared.", 1, emptyStoryFacts());
     expect(state.characters).toEqual([{ name: "Mara Vey" }]);
     expect(requests).toHaveLength(1);
   });
@@ -148,8 +148,8 @@ describe("createAgnesExtract", () => {
     const cache = new MemoryResponseCache();
     const extract = createAgnesExtract(client, { responseCache: cache });
 
-    const first = await extract("Mara appeared.", 1, emptyBible());
-    const second = await extract("Mara appeared.", 1, emptyBible());
+    const first = await extract("Mara appeared.", 1, emptyStoryFacts());
+    const second = await extract("Mara appeared.", 1, emptyStoryFacts());
 
     expect(calls).toBe(1); // the second identical call never reached the client
     expect(second).toEqual(first);

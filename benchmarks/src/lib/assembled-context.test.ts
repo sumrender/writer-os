@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { emptyBible } from "./bible.js";
+import { emptyStoryFacts } from "./story-facts.js";
 import { renderAssembledContext } from "./assembled-context.js";
 
 describe("renderAssembledContext", () => {
-  it("renders an empty bible as an explicit empty-canon marker", () => {
-    expect(renderAssembledContext(emptyBible())).toBe("(no canon established yet)");
+  it("renders an empty facts store as an explicit empty-canon marker", () => {
+    expect(renderAssembledContext(emptyStoryFacts())).toBe("(no canon established yet)");
   });
 
-  it("renders every established fact as one line, in bible order", () => {
+  it("renders every established fact as one line, in facts order", () => {
     const state = {
-      ...emptyBible(),
+      ...emptyStoryFacts(),
       characters: [{ name: "Mara Vey" }],
       items: [{ item: "brass compass", holder: "Mara Vey" }],
     };

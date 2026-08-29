@@ -1,8 +1,8 @@
 import {
   THREAD_STATUSES,
-  type BibleState,
+  type StoryFacts,
   type ThreadStatus,
-} from "./bible.js";
+} from "./story-facts.js";
 import type {
   Check,
   CheckResult,
@@ -10,12 +10,12 @@ import type {
   Generate,
   GeneratedChapter,
 } from "./pipeline.js";
-import { applyFact, type ExtractedFact } from "./bible-merge.js";
+import { applyFact, type ExtractedFact } from "./fact-merge.js";
 
 /**
  * Rule-based deterministic pipeline fakes. The mini-book fixture
  * (books/mini-book) is written against the same sentence grammar, so fake
- * extraction over it yields hand-computable bible states.
+ * extraction over it yields hand-computable facts states.
  *
  * Grammar — one fact per line, exact templates, case-sensitive:
  *   Introducing <Name>, <tagline>.                       → character
@@ -135,16 +135,16 @@ function parseFacts(text: string): ExtractedFact[] {
   return facts;
 }
 
-export const fakeExtract: Extract = async (chapterText, _ordinal, bibleSoFar) =>
-  parseFacts(chapterText).reduce((state, fact) => applyFact(state, fact), bibleSoFar);
+export const fakeExtract: Extract = async (chapterText, _ordinal, factsSoFar) =>
+  parseFacts(chapterText).reduce((state, fact) => applyFact(state, fact), factsSoFar);
 
 export const fakeCheck: Check = async (
-  bibleStateAsOf,
+  factsAsOf,
   chapterText,
 ): Promise<CheckResult> => {
   const flags = [];
   for (const fact of parseFacts(chapterText)) {
-    const flag = contradiction(bibleStateAsOf, fact);
+    const flag = contradiction(factsAsOf, fact);
     if (flag) {
       flags.push(flag);
     }
@@ -153,7 +153,7 @@ export const fakeCheck: Check = async (
 };
 
 function contradiction(
-  canon: BibleState,
+  canon: StoryFacts,
   fact: ExtractedFact,
 ): { kind: ExtractedFact["kind"]; message: string } | undefined {
   switch (fact.kind) {

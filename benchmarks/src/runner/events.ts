@@ -1,10 +1,10 @@
 import {
   ENTITY_KINDS,
   THREAD_STATUSES,
-  type BibleState,
+  type StoryFacts,
   type EntityKind,
   type ThreadStatus,
-} from "../lib/bible.js";
+} from "../lib/story-facts.js";
 import type { Expectation } from "../lib/assertions.js";
 import type { ExtractionSnapshot } from "../lib/extraction-run.js";
 import type { GateCheck, GateEvaluation } from "../lib/gates.js";
@@ -15,13 +15,13 @@ import type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extra
 /**
  * The wire vocabulary re-exported for consumers of the `@writer-os/benchmark/events`
  * subpath: event payload types they annotate against, plus the runtime kind
- * list the Story Bible viewer groups by.
+ * list the Story Facts viewer groups by.
  */
-export { ENTITY_KINDS } from "../lib/bible.js";
+export { ENTITY_KINDS } from "../lib/story-facts.js";
 export { isPlainObject, nonEmptyString, positiveInt } from "../lib/schema-primitives.js";
 export { AXES, JUDGES, PIPELINES } from "./types.js";
 export type { Axis, JudgeKind, PipelineKind } from "./types.js";
-export type { BibleState, EntityKind, ThreadStatus } from "../lib/bible.js";
+export type { StoryFacts, EntityKind, ThreadStatus } from "../lib/story-facts.js";
 export type { Expectation } from "../lib/assertions.js";
 export type { ExtractionSnapshot } from "../lib/extraction-run.js";
 export type { GateCheck, GateEvaluation } from "../lib/gates.js";
@@ -59,8 +59,8 @@ export interface ChapterCompletedEvent {
   readonly runIndex: number;
   readonly elapsedMs: number;
   readonly canonEntries: number;
-  /** The full Story Bible snapshot after this chapter. */
-  readonly bible: BibleState;
+  /** The full Story Facts snapshot after this chapter. */
+  readonly facts: StoryFacts;
 }
 
 /** One missed (`omission`) or violated (`fabrication`) assertion, per run. */
@@ -77,8 +77,8 @@ export interface RunCompletedEvent {
   readonly type: "run.completed";
   readonly exitCode: number;
   readonly report: ExtractionAxisReport;
-  /** The final Story Bible — the snapshot after the last chapter of the last run. */
-  readonly bible: BibleState;
+  /** The final Story Facts — the snapshot after the last chapter of the last run. */
+  readonly facts: StoryFacts;
   /** Every per-ordinal snapshot of the final run ("as of chapter N"). */
   readonly snapshots: readonly ExtractionSnapshot[];
   readonly evidence: readonly ExtractionEvidenceLine[];
@@ -180,12 +180,12 @@ const parseEntityKind: Parser<EntityKind> = oneOf(ENTITY_KINDS);
 const parseThreadStatus: Parser<ThreadStatus> = oneOf(THREAD_STATUSES);
 const parseExpectation: Parser<Expectation> = oneOf(["must", "must_not"] as const);
 
-const parseCharacter: Parser<BibleState["characters"][number]> = recordWith((r) => {
+const parseCharacter: Parser<StoryFacts["characters"][number]> = recordWith((r) => {
   const name = required(r, "name", parseNonEmptyString);
   return name !== null ? { name } : null;
 });
 
-const parseAppearance: Parser<BibleState["appearances"][number]> = recordWith((r) => {
+const parseAppearance: Parser<StoryFacts["appearances"][number]> = recordWith((r) => {
   const character = required(r, "character", parseString);
   const attribute = required(r, "attribute", parseString);
   const contains = required(r, "contains", parseString);
@@ -194,43 +194,43 @@ const parseAppearance: Parser<BibleState["appearances"][number]> = recordWith((r
     : null;
 });
 
-const parseRelationship: Parser<BibleState["relationships"][number]> = recordWith((r) => {
+const parseRelationship: Parser<StoryFacts["relationships"][number]> = recordWith((r) => {
   const from = required(r, "from", parseString);
   const to = required(r, "to", parseString);
   const relationType = required(r, "relationType", parseString);
   return from !== null && to !== null && relationType !== null ? { from, to, relationType } : null;
 });
 
-const parseItem: Parser<BibleState["items"][number]> = recordWith((r) => {
+const parseItem: Parser<StoryFacts["items"][number]> = recordWith((r) => {
   const item = required(r, "item", parseString);
   const holder = required(r, "holder", parseString);
   return item !== null && holder !== null ? { item, holder } : null;
 });
 
-const parseThread: Parser<BibleState["threads"][number]> = recordWith((r) => {
+const parseThread: Parser<StoryFacts["threads"][number]> = recordWith((r) => {
   const thread = required(r, "thread", parseString);
   const status = required(r, "status", parseThreadStatus);
   return thread !== null && status !== null ? { thread, status } : null;
 });
 
-const parseWorldRule: Parser<BibleState["worldRules"][number]> = recordWith((r) => {
+const parseWorldRule: Parser<StoryFacts["worldRules"][number]> = recordWith((r) => {
   const topic = required(r, "topic", parseString);
   return topic !== null ? { topic } : null;
 });
 
-const parseLexicon: Parser<BibleState["lexicon"][number]> = recordWith((r) => {
+const parseLexicon: Parser<StoryFacts["lexicon"][number]> = recordWith((r) => {
   const term = required(r, "term", parseString);
   const lockedSpelling = required(r, "lockedSpelling", parseBoolean);
   return term !== null && lockedSpelling !== null ? { term, lockedSpelling } : null;
 });
 
-const parseStyle: Parser<BibleState["style"][number]> = recordWith((r) => {
+const parseStyle: Parser<StoryFacts["style"][number]> = recordWith((r) => {
   const field = required(r, "field", parseString);
   const value = required(r, "value", parseString);
   return field !== null && value !== null ? { field, value } : null;
 });
 
-export const parseBibleState: Parser<BibleState> = recordWith((r) => {
+export const parseStoryFacts: Parser<StoryFacts> = recordWith((r) => {
   const characters = required(r, "characters", (v) => parseArray(v, parseCharacter));
   const appearances = required(r, "appearances", (v) => parseArray(v, parseAppearance));
   const relationships = required(r, "relationships", (v) => parseArray(v, parseRelationship));
@@ -258,8 +258,8 @@ export const parseBibleState: Parser<BibleState> = recordWith((r) => {
 
 const parseSnapshot: Parser<ExtractionSnapshot> = recordWith((r) => {
   const afterOrdinal = required(r, "afterOrdinal", parsePositiveInt);
-  const bible = required(r, "bible", parseBibleState);
-  return afterOrdinal !== null && bible !== null ? { afterOrdinal, bible } : null;
+  const facts = required(r, "facts", parseStoryFacts);
+  return afterOrdinal !== null && facts !== null ? { afterOrdinal, facts } : null;
 });
 
 const parseKindReport: Parser<KindReport> = recordWith((r) => {
@@ -375,19 +375,19 @@ export function parseBenchmarkEvent(value: unknown): BenchmarkEvent | null {
       const runIndex = required(record, "runIndex", parsePositiveInt);
       const elapsedMs = required(record, "elapsedMs", parseNonNegativeInt);
       const canonEntries = required(record, "canonEntries", parseNonNegativeInt);
-      const bible = required(record, "bible", parseBibleState);
-      return ordinal !== null && runIndex !== null && elapsedMs !== null && canonEntries !== null && bible !== null
-        ? { type, ordinal, runIndex, elapsedMs, canonEntries, bible }
+      const facts = required(record, "facts", parseStoryFacts);
+      return ordinal !== null && runIndex !== null && elapsedMs !== null && canonEntries !== null && facts !== null
+        ? { type, ordinal, runIndex, elapsedMs, canonEntries, facts }
         : null;
     }
     case "run.completed": {
       const exitCode = required(record, "exitCode", parseNonNegativeInt);
       const report = required(record, "report", parseAxisReport);
-      const bible = required(record, "bible", parseBibleState);
+      const facts = required(record, "facts", parseStoryFacts);
       const snapshots = required(record, "snapshots", (v) => parseArray(v, parseSnapshot));
       const evidence = required(record, "evidence", (v) => parseArray(v, parseEvidenceLine));
-      return exitCode !== null && report !== null && bible !== null && snapshots !== null && evidence !== null
-        ? { type, exitCode, report, bible, snapshots, evidence }
+      return exitCode !== null && report !== null && facts !== null && snapshots !== null && evidence !== null
+        ? { type, exitCode, report, facts, snapshots, evidence }
         : null;
     }
     case "run.failed": {

@@ -74,8 +74,8 @@ describe("runExtractionAxis — known-by-construction scores", () => {
 describe("runExtractionAxis — judge-routed paraphrases with caching", () => {
   it("resolves a paraphrased relation type through the cached judge exactly once", async () => {
     const { chapters, set } = await loadMiniBook();
-    const paraphrasingExtract: Extract = async (text, ordinal, bibleSoFar) => {
-      const state = await fakeExtract(text, ordinal, bibleSoFar);
+    const paraphrasingExtract: Extract = async (text, ordinal, factsSoFar) => {
+      const state = await fakeExtract(text, ordinal, factsSoFar);
       return {
         ...state,
         relationships: state.relationships.map((r) =>
@@ -104,14 +104,14 @@ describe("runExtractionAxis — judge-routed paraphrases with caching", () => {
 });
 
 describe("runExtractionAxis — omissions, fabrications, gates", () => {
-  const withoutLexiconCh2: Extract = async (text, ordinal, bible) =>
+  const withoutLexiconCh2: Extract = async (text, ordinal, facts) =>
     fakeExtract(
       text
         .split("\n")
         .filter((line) => !line.startsWith('Say always "Vess"'))
         .join("\n"),
       ordinal,
-      bible,
+      facts,
     );
 
   it("fails recall-driven gates when a required term is omitted every run", async () => {
@@ -136,8 +136,8 @@ describe("runExtractionAxis — omissions, fabrications, gates", () => {
   it("reports judge-estimated fabrications separately without touching exact scores", async () => {
     const { chapters, set } = await loadMiniBook();
     const FABRICATED_RULE = "vessels of iron ships";
-    const fabricatingExtract: Extract = async (text, ordinal, bible) => {
-      const state = await fakeExtract(text, ordinal, bible);
+    const fabricatingExtract: Extract = async (text, ordinal, facts) => {
+      const state = await fakeExtract(text, ordinal, facts);
       return state.worldRules.some((r) => r.topic === FABRICATED_RULE)
         ? state
         : { ...state, worldRules: [...state.worldRules, { topic: FABRICATED_RULE }] };
@@ -218,14 +218,14 @@ describe("report formatting", () => {
 
   it("lists failing gates explicitly when the run fails", async () => {
     const { chapters, set } = await loadMiniBook();
-    const withoutStyle: Extract = async (text, ordinal, bible) =>
+    const withoutStyle: Extract = async (text, ordinal, facts) =>
       fakeExtract(
         text
           .split("\n")
           .filter((line) => !line.startsWith("Style decree"))
           .join("\n"),
         ordinal,
-        bible,
+        facts,
       );
     const report = await runExtractionAxis({
       bookId: "mini-book",

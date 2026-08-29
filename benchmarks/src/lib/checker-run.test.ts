@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyBible } from "./bible.js";
+import { emptyStoryFacts } from "./story-facts.js";
 import { fakeExtract } from "./fakes.js";
 import { runExtraction } from "./extraction-run.js";
 import { runCheckerCases } from "./checker-run.js";
@@ -39,7 +39,7 @@ describe("runCheckerCases", () => {
       [controlCase(1, "The brass compass rests with Bellin the harbormaster.")],
       [],
       async (canon, text) => {
-        expect(canon).toEqual(emptyBible());
+        expect(canon).toEqual(emptyStoryFacts());
         return { flags: [] };
       },
     );

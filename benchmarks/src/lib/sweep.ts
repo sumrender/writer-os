@@ -1,5 +1,5 @@
-import type { BibleState } from "./bible.js";
-import { bibleFacts, type Fact } from "./fact-text.js";
+import type { StoryFacts } from "./story-facts.js";
+import { storyFacts, type Fact } from "./fact-text.js";
 import { silentLogger, type Logger } from "./logger.js";
 
 /**
@@ -34,13 +34,13 @@ export function bookSourceText(chapters: readonly { ordinal: number; text: strin
 }
 
 export async function sweepUnmatchedFacts(
-  state: BibleState,
+  state: StoryFacts,
   claimedKeys: ReadonlySet<string>,
   sourceText: string,
   checker: SupportChecker,
   log: Logger = silentLogger,
 ): Promise<SweepResult> {
-  const unmatched = bibleFacts(state).filter((fact) => !claimedKeys.has(fact.key));
+  const unmatched = storyFacts(state).filter((fact) => !claimedKeys.has(fact.key));
   log.debug(`    sweep: ${unmatched.length} fact(s) to check (${claimedKeys.size} already claimed)`);
   const findings: SweepFinding[] = [];
 

@@ -1,6 +1,6 @@
 import type { Stats } from "@writer-os/benchmark/events";
 
-/** Presentation-only formatting for the report and bible views. */
+/** Presentation-only formatting for the report and facts views. */
 
 export function percent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;

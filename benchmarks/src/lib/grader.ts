@@ -1,5 +1,5 @@
 import type { Assertion, AssertionSet, Expectation } from "./assertions.js";
-import type { BibleState, EntityKind } from "./bible.js";
+import type { StoryFacts, EntityKind } from "./story-facts.js";
 import type { ExtractionSnapshot } from "./extraction-run.js";
 import type { EquivalenceChecker } from "./judge.js";
 import { findMatch } from "./assertion-match.js";
@@ -28,7 +28,7 @@ export interface GradedExtraction {
   readonly graded: readonly GradedAssertion[];
   /** Content keys (any ordinal) claimed by matched `must` assertions. */
   readonly claimedKeys: ReadonlySet<string>;
-  readonly finalBible: BibleState;
+  readonly finalFacts: StoryFacts;
   readonly finalOrdinal: number;
 }
 
@@ -55,7 +55,7 @@ export async function gradeAssertionSet(
     log.debug(
       `    grade ${assertion.id} (${assertion.kind}, ${assertion.expect}, as_of ${snapshot.afterOrdinal})`,
     );
-    const outcome = await findMatch(assertion, snapshot.bible, checker);
+    const outcome = await findMatch(assertion, snapshot.facts, checker);
 
     let verdict: AssertionVerdict;
     if (outcome === undefined) {
@@ -85,7 +85,7 @@ export async function gradeAssertionSet(
   return {
     graded,
     claimedKeys,
-    finalBible: last.bible,
+    finalFacts: last.facts,
     finalOrdinal: last.afterOrdinal,
   };
 }

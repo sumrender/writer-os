@@ -1,7 +1,7 @@
-import type { BibleState } from "./bible.js";
+import type { StoryFacts } from "./story-facts.js";
 
 /**
- * The Story Bible merge algebra shared by every extractor implementation
+ * The Story Facts merge algebra shared by every extractor implementation
  * (deterministic fakes and vendor-backed alike): the semantics of folding an
  * extracted fact into canon state — items, threads, and style replace their
  * prior entries by identity key; relationships replace by endpoint pair;
@@ -11,15 +11,15 @@ import type { BibleState } from "./bible.js";
  */
 
 export type ExtractedFact =
-  | ({ readonly kind: "character" } & import("./bible.js").CharacterEntry)
-  | ({ readonly kind: "appearance" } & import("./bible.js").AppearanceEntry)
-  | ({ readonly kind: "relationship" } & import("./bible.js").RelationshipEntry)
-  | ({ readonly kind: "item" } & import("./bible.js").ItemEntry)
-  | ({ readonly kind: "thread" } & import("./bible.js").ThreadEntry)
-  | ({ readonly kind: "world_rule" } & import("./bible.js").WorldRuleEntry)
+  | ({ readonly kind: "character" } & import("./story-facts.js").CharacterEntry)
+  | ({ readonly kind: "appearance" } & import("./story-facts.js").AppearanceEntry)
+  | ({ readonly kind: "relationship" } & import("./story-facts.js").RelationshipEntry)
+  | ({ readonly kind: "item" } & import("./story-facts.js").ItemEntry)
+  | ({ readonly kind: "thread" } & import("./story-facts.js").ThreadEntry)
+  | ({ readonly kind: "world_rule" } & import("./story-facts.js").WorldRuleEntry)
   | { readonly kind: "timeline"; readonly event: string }
-  | ({ readonly kind: "lexicon" } & import("./bible.js").LexiconEntry)
-  | ({ readonly kind: "style" } & import("./bible.js").StyleEntry);
+  | ({ readonly kind: "lexicon" } & import("./story-facts.js").LexiconEntry)
+  | ({ readonly kind: "style" } & import("./story-facts.js").StyleEntry);
 
 /** Equality on plain data entries; key order is fixed by our own constructors. */
 function serializedEqual(a: unknown, b: unknown): boolean {
@@ -43,17 +43,17 @@ function replaceOrAppend<T>(
     : [...list, entry];
 }
 
-export function applyFact(bible: BibleState, fact: ExtractedFact): BibleState {
+export function applyFact(facts: StoryFacts, fact: ExtractedFact): StoryFacts {
   switch (fact.kind) {
     case "character":
       return {
-        ...bible,
-        characters: appendIfNew(bible.characters, { name: fact.name }),
+        ...facts,
+        characters: appendIfNew(facts.characters, { name: fact.name }),
       };
     case "appearance":
       return {
-        ...bible,
-        appearances: appendIfNew(bible.appearances, {
+        ...facts,
+        appearances: appendIfNew(facts.appearances, {
           character: fact.character,
           attribute: fact.attribute,
           contains: fact.contains,
@@ -61,52 +61,51 @@ export function applyFact(bible: BibleState, fact: ExtractedFact): BibleState {
       };
     case "relationship":
       return {
-        ...bible,
+        ...facts,
         relationships: replaceOrAppend(
-          bible.relationships,
+          facts.relationships,
           { from: fact.from, to: fact.to, relationType: fact.relationType },
           (r) => `${r.from}→${r.to}`,
         ),
       };
     case "item":
       return {
-        ...bible,
+        ...facts,
         items: replaceOrAppend(
-          bible.items,
+          facts.items,
           { item: fact.item, holder: fact.holder },
           (i) => i.item,
         ),
       };
     case "thread":
       return {
-        ...bible,
+        ...facts,
         threads: replaceOrAppend(
-          bible.threads,
+          facts.threads,
           { thread: fact.thread, status: fact.status },
           (t) => t.thread,
         ),
       };
     case "world_rule":
-      return { ...bible, worldRules: appendIfNew(bible.worldRules, { topic: fact.topic }) };
+      return { ...facts, worldRules: appendIfNew(facts.worldRules, { topic: fact.topic }) };
     case "timeline":
-      return { ...bible, timeline: appendIfNew(bible.timeline, fact.event) };
+      return { ...facts, timeline: appendIfNew(facts.timeline, fact.event) };
     case "lexicon":
       return {
-        ...bible,
-        lexicon: appendIfNew(bible.lexicon, {
+        ...facts,
+        lexicon: appendIfNew(facts.lexicon, {
           term: fact.term,
           lockedSpelling: fact.lockedSpelling,
         }),
       };
     case "style":
       return {
-        ...bible,
+        ...facts,
         style: replaceOrAppend(
-          bible.style,
+          facts.style,
           { field: fact.field, value: fact.value },
           (s) => s.field,
         ),
       };
   }
 }
-

@@ -1,5 +1,5 @@
-import { ENTITY_KINDS, type EntityKind } from "./bible.js";
-import { bibleFacts } from "./fact-text.js";
+import { ENTITY_KINDS, type EntityKind } from "./story-facts.js";
+import { storyFacts } from "./fact-text.js";
 import { isPlainObject, nonEmptyString } from "./schema-primitives.js";
 import { firstForcedToolArguments } from "./agnes-response.js";
 import { assertWithinContextWindow, type AgnesClient } from "./agnes-client.js";
@@ -118,9 +118,9 @@ export function checkerUserPrompt(input: {
 }
 
 export function createAgnesCheck(client: AgnesClient): Check {
-  return async (bibleStateAsOf, chapterText) => {
+  return async (factsAsOf, chapterText) => {
     const canonView =
-      bibleFacts(bibleStateAsOf)
+      storyFacts(factsAsOf)
         .map((fact) => fact.text)
         .join("\n") || "(no canon established yet)";
     assertWithinContextWindow("consistency check", [CHECK_SYSTEM, canonView, chapterText]);

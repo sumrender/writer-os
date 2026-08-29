@@ -3,9 +3,9 @@ import {
   THREAD_STATUSES,
   type EntityKind,
   type ThreadStatus,
-} from "./bible.js";
-import { applyFact, type ExtractedFact } from "./bible-merge.js";
-import { bibleFacts } from "./fact-text.js";
+} from "./story-facts.js";
+import { applyFact, type ExtractedFact } from "./fact-merge.js";
+import { storyFacts } from "./fact-text.js";
 import { isPlainObject, nonEmptyString } from "./schema-primitives.js";
 import { firstForcedToolArguments } from "./agnes-response.js";
 import { assertWithinContextWindow, type AgnesClient, type ChatCompletionRequest } from "./agnes-client.js";
@@ -20,14 +20,14 @@ import { silentLogger, type Logger } from "./logger.js";
  * the canon established so far and returns only facts THAT chapter text
  * establishes, as forced-tool structured output (the model has no JSON-schema
  * response mode). Facts are validated precisely at the trust boundary and
- * merged onto canon through the shared merge algebra (lib/bible-merge.ts),
+ * merged onto canon through the shared merge algebra (lib/fact-merge.ts),
  * so grader-visible state is identical regardless of fact origin.
  */
 
 export const EXTRACT_MAX_TOKENS = 16_384;
 
 const EXTRACT_SYSTEM = [
-  "You are a Story Bible extractor grading fixture extraction fidelity.",
+  "You are a Story Facts extractor grading fixture extraction fidelity.",
   "For each fact THIS chapter's text establishes, emit exactly one fact;",
   "emit nothing the chapter does not support, and preserve source spellings exactly.",
   "Merge semantics you must respect: character names dedupe automatically;",
@@ -46,7 +46,7 @@ const EXTRACT_TOOL = {
   type: "function",
   function: {
     name: "record_facts",
-    description: "Record Story Bible facts newly established by this chapter.",
+    description: "Record Story Facts facts newly established by this chapter.",
     parameters: {
       type: "object",
       properties: {
@@ -657,9 +657,9 @@ export function createAgnesExtract(
     options.responseCache?.set(extractionRequestKey(client.model, request), response);
     return response;
   };
-  return async (chapterText, ordinal, bibleSoFar) => {
+  return async (chapterText, ordinal, factsSoFar) => {
     const canonView =
-      bibleFacts(bibleSoFar)
+      storyFacts(factsSoFar)
         .map((fact) => fact.text)
         .join("\n") || "(no canon established yet)";
     assertWithinContextWindow(`extraction of chapter ${ordinal}`, [
@@ -746,7 +746,7 @@ export function createAgnesExtract(
     logSkipped(result.skipped);
     const facts = result.facts;
     log.debug(`        extract chapter ${ordinal}: ${facts.length} fact(s) parsed`);
-    return facts.reduce((state, fact) => applyFact(state, fact), bibleSoFar);
+    return facts.reduce((state, fact) => applyFact(state, fact), factsSoFar);
   };
 }
 

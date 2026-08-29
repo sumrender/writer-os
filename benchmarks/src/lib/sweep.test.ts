@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { emptyBible } from "./bible.js";
+import { emptyStoryFacts } from "./story-facts.js";
 import { createStubJudge } from "./stub-judge.js";
-import { bibleFacts, entryKey } from "./fact-text.js";
+import { storyFacts, entryKey } from "./fact-text.js";
 import { bookSourceText, sweepUnmatchedFacts } from "./sweep.js";
 
 describe("bookSourceText", () => {
@@ -17,12 +17,12 @@ describe("bookSourceText", () => {
 describe("sweepUnmatchedFacts", () => {
   it("judges only facts no positive assertion claimed", async () => {
     const state = {
-      ...emptyBible(),
+      ...emptyStoryFacts(),
       characters: [{ name: "Mara Vey" }],
       items: [{ item: "brass compass", holder: "Joren Vey" }],
     };
     const claimed = new Set(
-      bibleFacts(state)
+      storyFacts(state)
         .filter((f) => f.entityKind === "character")
         .map((f) => f.key),
     );
@@ -37,7 +37,7 @@ describe("sweepUnmatchedFacts", () => {
 
   it("computes the estimated fabrication rate from unsupported findings", async () => {
     const state = {
-      ...emptyBible(),
+      ...emptyStoryFacts(),
       worldRules: [{ topic: "vessels of iron" }],
       timeline: ["the ledger burned"],
     };
@@ -55,8 +55,8 @@ describe("sweepUnmatchedFacts", () => {
   });
 
   it("reports a zero rate without calling the judge when everything is claimed", async () => {
-    const state = { ...emptyBible(), characters: [{ name: "Joren Vey" }] };
-    const allClaimed = new Set(bibleFacts(state).map((f) => f.key));
+    const state = { ...emptyStoryFacts(), characters: [{ name: "Joren Vey" }] };
+    const allClaimed = new Set(storyFacts(state).map((f) => f.key));
     const judge = createStubJudge({ defaultSupported: false });
 
     const result = await sweepUnmatchedFacts(state, allClaimed, "source", judge);
@@ -68,7 +68,7 @@ describe("sweepUnmatchedFacts", () => {
   });
 
   it("hands the judge a rendered fact plus the labeled source text", async () => {
-    const state = { ...emptyBible(), items: [{ item: "brass compass", holder: "Mara Vey" }] };
+    const state = { ...emptyStoryFacts(), items: [{ item: "brass compass", holder: "Mara Vey" }] };
     let seen: { fact: string; sourceText: string } | undefined;
     const spy = {
       async isSupportedBySource(request: { fact: string; sourceText: string }) {
@@ -84,7 +84,7 @@ describe("sweepUnmatchedFacts", () => {
   });
 
   it("keys findings by content so callers can cross-reference claims", async () => {
-    const state = { ...emptyBible(), items: [{ item: "brass compass", holder: "Mara Vey" }] };
+    const state = { ...emptyStoryFacts(), items: [{ item: "brass compass", holder: "Mara Vey" }] };
     const result = await sweepUnmatchedFacts(state, new Set(), "s", createStubJudge());
     expect(result.findings[0]?.fact.key).toBe(entryKey("item", state.items[0]));
   });

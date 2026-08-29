@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { emptyBible } from "./bible.js";
-import { bibleFacts } from "./fact-text.js";
+import { emptyStoryFacts } from "./story-facts.js";
+import { storyFacts } from "./fact-text.js";
 
-describe("bibleFacts", () => {
+describe("storyFacts", () => {
   it("flattens every entity kind into a keyed, human-readable fact", () => {
     const state = {
-      ...emptyBible(),
+      ...emptyStoryFacts(),
       characters: [{ name: "Mara Vey" }],
       appearances: [{ character: "Mara Vey", attribute: "her coat", contains: "salt-white wool" }],
       relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
@@ -17,7 +17,7 @@ describe("bibleFacts", () => {
       style: [{ field: "narration", value: "close third person, past tense" }],
     };
 
-    const facts = bibleFacts(state);
+    const facts = storyFacts(state);
     const byText = Object.fromEntries(facts.map((f) => [f.entityKind, f.text]));
 
     expect(byText.character).toBe('character named "Mara Vey"');
@@ -34,16 +34,16 @@ describe("bibleFacts", () => {
   });
 
   it("gives each fact a stable content key that distinguishes payloads", () => {
-    const [before] = bibleFacts({
-      ...emptyBible(),
+    const [before] = storyFacts({
+      ...emptyStoryFacts(),
       items: [{ item: "brass compass", holder: "Mara Vey" }],
     });
-    const [after] = bibleFacts({
-      ...emptyBible(),
+    const [after] = storyFacts({
+      ...emptyStoryFacts(),
       items: [{ item: "brass compass", holder: "Joren Vey" }],
     });
-    const [again] = bibleFacts({
-      ...emptyBible(),
+    const [again] = storyFacts({
+      ...emptyStoryFacts(),
       items: [{ item: "brass compass", holder: "Mara Vey" }],
     });
 

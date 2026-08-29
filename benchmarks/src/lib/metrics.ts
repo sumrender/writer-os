@@ -1,4 +1,4 @@
-import type { EntityKind } from "./bible.js";
+import type { EntityKind } from "./story-facts.js";
 
 /**
  * Grading arithmetic (docs/TESTING.md §6): per-kind precision/recall/F1 over

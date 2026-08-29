@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AgnesClient, ChatCompletionRequest } from "./agnes-client.js";
 import { createAgnesCheck, parseCheckerFlags } from "./agnes-check.js";
-import { emptyBible } from "./bible.js";
-import { applyFact } from "./bible-merge.js";
+import { emptyStoryFacts } from "./story-facts.js";
+import { applyFact } from "./fact-merge.js";
 
 function scriptedClient(response: unknown): {
   client: AgnesClient;
@@ -54,7 +54,7 @@ describe("createAgnesCheck", () => {
     const { client, request } = scriptedClient(
       toolResponse([{ kind: "item", message: 'canon says Mara holds the compass; text says Ilya' }]),
     );
-    const canon = applyFact(emptyBible(), {
+    const canon = applyFact(emptyStoryFacts(), {
       kind: "item",
       item: "brass compass",
       holder: "Mara Vey",
@@ -76,7 +76,7 @@ describe("createAgnesCheck", () => {
 
   it("reports zero flags for clean text against an empty canon", async () => {
     const { client } = scriptedClient(toolResponse([]));
-    const result = await createAgnesCheck(client)(emptyBible(), "Anything goes.");
+    const result = await createAgnesCheck(client)(emptyStoryFacts(), "Anything goes.");
     expect(result.flags).toEqual([]);
   });
 
@@ -85,7 +85,7 @@ describe("createAgnesCheck", () => {
       toolResponse([{ kind: "gods", message: "clash" }]),
       toolResponse([{ kind: "item", message: "canon says Mara holds the compass" }]),
     ]);
-    const result = await createAgnesCheck(client)(emptyBible(), "The compass moved on.");
+    const result = await createAgnesCheck(client)(emptyStoryFacts(), "The compass moved on.");
     expect(result.flags).toEqual([{ kind: "item", message: "canon says Mara holds the compass" }]);
     expect(requests).toHaveLength(2);
     expect(String(requests[1]?.user)).toContain("rejected by validation");

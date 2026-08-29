@@ -40,30 +40,30 @@ describe("mini-book fixture", () => {
     }
   });
 
-  it("yields per-ordinal bible-state snapshots under sequential fake extraction", async () => {
+  it("yields per-ordinal facts-state snapshots under sequential fake extraction", async () => {
     const book = validateBook(bookDir);
     if (!book.ok) throw new Error("fixture must validate");
     const snapshots = await runExtraction(book.chapters, fakeExtract);
 
     expect(snapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
 
-    const after1 = snapshots[0]?.bible;
+    const after1 = snapshots[0]?.facts;
     expect(after1?.characters.map((c) => c.name)).toEqual(["Mara Vey", "Joren Vey"]);
     expect(after1?.items).toEqual([]);
     expect(after1?.timeline).toEqual(["the harbor bell rang"]);
 
-    const after2 = snapshots[1]?.bible;
+    const after2 = snapshots[1]?.facts;
     expect(after2?.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
     expect(after2?.threads).toEqual([{ thread: "the missing ledger", status: "open" }]);
     expect(after2?.lexicon).toEqual([{ term: "Vess", lockedSpelling: true }]);
 
-    const after3 = snapshots[2]?.bible;
+    const after3 = snapshots[2]?.facts;
     expect(after3?.timeline).toEqual(["the harbor bell rang", "the ledger burned"]);
     expect(after3?.worldRules).toEqual([
       { topic: "the northern light burns without oil" },
     ]);
 
-    const final = snapshots[3]?.bible;
+    const final = snapshots[3]?.facts;
     expect(final?.items).toEqual([{ item: "brass compass", holder: "Joren Vey" }]);
     expect(final?.threads).toEqual([{ thread: "the missing ledger", status: "resolved" }]);
     expect(final?.relationships).toEqual([

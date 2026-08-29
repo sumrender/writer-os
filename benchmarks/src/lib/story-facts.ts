@@ -1,5 +1,5 @@
 /**
- * Story Bible state shape: the structured canon both pipelines and graders
+ * Story Facts shape: the structured canon both pipelines and graders
  * read. Entries mirror PRD §5.2 entity kinds; the kind list is the single
  * source of truth shared by assertion schemas, pipeline ops, and fakes.
  */
@@ -62,7 +62,7 @@ export interface StyleEntry {
   readonly value: string;
 }
 
-export interface BibleState {
+export interface StoryFacts {
   readonly characters: readonly CharacterEntry[];
   readonly appearances: readonly AppearanceEntry[];
   readonly relationships: readonly RelationshipEntry[];
@@ -75,7 +75,7 @@ export interface BibleState {
   readonly style: readonly StyleEntry[];
 }
 
-export function emptyBible(): BibleState {
+export function emptyStoryFacts(): StoryFacts {
   return {
     characters: [],
     appearances: [],
@@ -89,17 +89,17 @@ export function emptyBible(): BibleState {
   };
 }
 
-/** Total Canon entries held by a bible state — the Story Bible's size. */
-export function canonEntryCount(bible: BibleState): number {
+/** Total Canon entries held by a Story Facts store — its size. */
+export function factCount(facts: StoryFacts): number {
   return (
-    bible.characters.length +
-    bible.appearances.length +
-    bible.relationships.length +
-    bible.items.length +
-    bible.threads.length +
-    bible.worldRules.length +
-    bible.timeline.length +
-    bible.lexicon.length +
-    bible.style.length
+    facts.characters.length +
+    facts.appearances.length +
+    facts.relationships.length +
+    facts.items.length +
+    facts.threads.length +
+    facts.worldRules.length +
+    facts.timeline.length +
+    facts.lexicon.length +
+    facts.style.length
   );
 }

@@ -67,11 +67,11 @@ Fixture-side machinery beside `src/lib/`:
 
 - `lib/assertions.ts` — typed assertion-set schema (nine entity kinds, `must`/`must_not`, `as_of`, evidence) with a validator that rejects malformed sets precisely
 - `lib/assertion-file.ts` — loads and validates a book's `assertions.yml`
-- `lib/pipeline.ts` — the pipeline-under-test port: `extract(chapterText, ordinal, bibleSoFar)`, `check(bibleStateAsOf, chapterText)`, `generate(context, intent?)`, all strict-structured on both boundaries
+- `lib/pipeline.ts` — the pipeline-under-test port: `extract(chapterText, ordinal, factsSoFar)`, `check(factsAsOf, chapterText)`, `generate(context, intent?)`, all strict-structured on both boundaries
 - `lib/fakes.ts` — deterministic rule-based implementations of all three ops
-- `lib/extraction-run.ts` — drives extraction sequentially over a book, snapshotting the bible state after each ordinal
-- `lib/fact-text.ts` — renders structured bible entries as keyed fact descriptors
-- `lib/assertion-match.ts` — assertion↔bible matching: exact checks first; judgable fields (relation types, descriptions, topics, event wording) route to the equivalence judge on `must` assertions only — names, holders, statuses, and spellings never depend on a model's opinion
+- `lib/extraction-run.ts` — drives extraction sequentially over a book, snapshotting the facts after each ordinal
+- `lib/fact-text.ts` — renders structured facts as keyed fact descriptors
+- `lib/assertion-match.ts` — assertion↔fact matching: exact checks first; judgable fields (relation types, descriptions, topics, event wording) route to the equivalence judge on `must` assertions only — names, holders, statuses, and spellings never depend on a model's opinion
 - `lib/grader.ts` — grades an assertion set against snapshots: satisfied `must` = TP, missed `must` = omission, triggered `must_not` = fabrication; claims matched facts by content key
 - `lib/sweep.ts` — open-world sweep: facts no positive assertion claimed get judged against the source text; yields an *estimated* fabrication rate reported separately from exact scores
 - `lib/judge.ts` / `lib/stub-judge.ts` / `lib/live-judge.ts` — the judge seam: equivalence-only verdicts per ADR-0005 (two values + fixed rubric in, equivalent-or-not out, never fixture text); a scripted stub keeps runs offline, the Agnes-backed implementation (`agnes-2.5-flash`, forced tool-call verdicts per ADR-0004) shares the identical interface
@@ -140,7 +140,7 @@ request starts (~17 RPM of headroom under Agnes's free-tier 20 executable RPM; w
 `AGNES_MIN_INTERVAL_MS`) plus exponential backoff on 429/5xx — with retry-safe payloads guarded
 against the model's 512K context window (`lib/agnes-client.ts::assertWithinContextWindow`).
 Model facts are validated at the trust boundary and folded into canon by the merge algebra in
-`lib/bible-merge.ts`, so grader-visible state is identical regardless of fact origin. A
+`lib/fact-merge.ts`, so grader-visible state is identical regardless of fact origin. A
 connectivity probe for both transport modes lives at `scripts/probe-agnes.ts`.
 
 Exit codes: `0` ok · `1` fixture validation failure · `2` usage error · `3` reserved in `types.ts` for an axis with no registered pipeline (currently unreachable — all three axes are wired in `commands.ts`) · `4` gate failure (global precision floor or a per-kind recall floor missed).

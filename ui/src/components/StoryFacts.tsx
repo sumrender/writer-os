@@ -1,18 +1,18 @@
-import type { BibleState, ThreadStatus } from "@writer-os/benchmark/events";
+import type { StoryFacts as StoryFactsState, ThreadStatus } from "@writer-os/benchmark/events";
 
 /**
- * The Story Bible viewer (issue #11 stories 24–27): Canon grouped by the nine
- * entity kinds, each rendered with the fields the benchmark's BibleState
+ * The Story Facts viewer (issue #11 stories 24–27): Canon grouped by the nine
+ * entity kinds, each rendered with the fields the benchmark's StoryFacts
  * actually carries. The benchmark model is deliberately simpler than the PRD
  * product model, so this renders what exists rather than inventing fields.
  */
 
-export function StoryBible({ bible }: { bible: BibleState }) {
+export function StoryFacts({ facts }: { facts: StoryFactsState }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <KindSection title="Characters" count={bible.characters.length}>
+      <KindSection title="Characters" count={facts.characters.length}>
         <ul className="space-y-1">
-          {bible.characters.map((c) => (
+          {facts.characters.map((c) => (
             <li key={c.name} className="font-medium text-zinc-100">
               {c.name}
             </li>
@@ -20,9 +20,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ul>
       </KindSection>
 
-      <KindSection title="Appearances" count={bible.appearances.length}>
+      <KindSection title="Appearances" count={facts.appearances.length}>
         <ul className="space-y-1">
-          {bible.appearances.map((a, i) => (
+          {facts.appearances.map((a, i) => (
             <li key={i} className="text-zinc-300">
               <span className="font-medium text-zinc-100">{a.character}</span> · {a.attribute}:{" "}
               {a.contains}
@@ -31,9 +31,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ul>
       </KindSection>
 
-      <KindSection title="Relationships" count={bible.relationships.length}>
+      <KindSection title="Relationships" count={facts.relationships.length}>
         <ul className="space-y-1">
-          {bible.relationships.map((r, i) => (
+          {facts.relationships.map((r, i) => (
             <li key={i} className="text-zinc-300">
               <span className="font-medium text-zinc-100">{r.from}</span> is {r.relationType} of{" "}
               <span className="font-medium text-zinc-100">{r.to}</span>
@@ -42,9 +42,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ul>
       </KindSection>
 
-      <KindSection title="Items" count={bible.items.length}>
+      <KindSection title="Items" count={facts.items.length}>
         <ul className="space-y-1">
-          {bible.items.map((it, i) => (
+          {facts.items.map((it, i) => (
             <li key={i} className="text-zinc-300">
               <span className="font-medium text-zinc-100">{it.item}</span> held by {it.holder}
             </li>
@@ -52,9 +52,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ul>
       </KindSection>
 
-      <KindSection title="Plot threads" count={bible.threads.length}>
+      <KindSection title="Plot threads" count={facts.threads.length}>
         <ul className="space-y-1">
-          {bible.threads.map((t, i) => (
+          {facts.threads.map((t, i) => (
             <li key={i} className="flex items-center justify-between text-zinc-300">
               <span className="font-medium text-zinc-100">{t.thread}</span>
               <span
@@ -67,9 +67,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ul>
       </KindSection>
 
-      <KindSection title="World rules" count={bible.worldRules.length}>
+      <KindSection title="World rules" count={facts.worldRules.length}>
         <ul className="space-y-1">
-          {bible.worldRules.map((w, i) => (
+          {facts.worldRules.map((w, i) => (
             <li key={i} className="text-zinc-300">
               {w.topic}
             </li>
@@ -77,9 +77,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ul>
       </KindSection>
 
-      <KindSection title="Timeline" count={bible.timeline.length}>
+      <KindSection title="Timeline" count={facts.timeline.length}>
         <ol className="list-decimal space-y-1 pl-5">
-          {bible.timeline.map((event, i) => (
+          {facts.timeline.map((event, i) => (
             <li key={i} className="text-zinc-300">
               {event}
             </li>
@@ -87,9 +87,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ol>
       </KindSection>
 
-      <KindSection title="Lexicon" count={bible.lexicon.length}>
+      <KindSection title="Lexicon" count={facts.lexicon.length}>
         <ul className="space-y-1">
-          {bible.lexicon.map((l) => (
+          {facts.lexicon.map((l) => (
             <li key={l.term} className="text-zinc-300">
               <span className="font-medium text-zinc-100">{l.term}</span>
               {l.lockedSpelling && (
@@ -102,9 +102,9 @@ export function StoryBible({ bible }: { bible: BibleState }) {
         </ul>
       </KindSection>
 
-      <KindSection title="Style" count={bible.style.length}>
+      <KindSection title="Style" count={facts.style.length}>
         <ul className="space-y-1">
-          {bible.style.map((s, i) => (
+          {facts.style.map((s, i) => (
             <li key={i} className="text-zinc-300">
               <span className="font-medium text-zinc-100">{s.field}</span>: {s.value}
             </li>

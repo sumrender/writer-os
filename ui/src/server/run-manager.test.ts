@@ -91,7 +91,7 @@ describe("run manager lifecycle (real built CLI, offline fake/stub)", () => {
     const completed = finished.events[9];
     if (completed?.type !== "run.completed") throw new Error("expected run.completed");
     expect(completed.report.passed).toBe(true);
-    expect(completed.bible.characters.map((c) => c.name)).toEqual(["Mara Vey", "Joren Vey"]);
+    expect(completed.facts.characters.map((c) => c.name)).toEqual(["Mara Vey", "Joren Vey"]);
   });
 
   it("persists the finished run record to disk under the ui-runs directory", async () => {

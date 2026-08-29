@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { emptyBible } from "./bible.js";
-import { applyFact, type ExtractedFact } from "./bible-merge.js";
+import { emptyStoryFacts } from "./story-facts.js";
+import { applyFact, type ExtractedFact } from "./fact-merge.js";
 
 describe("applyFact — the merge algebra every extractor shares", () => {
   it("dedupes characters wholly and replaces items, threads, and styles by identity key", () => {
-    let state = emptyBible();
+    let state = emptyStoryFacts();
     state = applyFact(state, { kind: "character", name: "Mara Vey" });
     state = applyFact(state, { kind: "character", name: "Mara Vey" });
     expect(state.characters).toEqual([{ name: "Mara Vey" }]);
@@ -23,7 +23,7 @@ describe("applyFact — the merge algebra every extractor shares", () => {
   });
 
   it("replaces relationships by endpoint pair regardless of relation wording", () => {
-    let state = emptyBible();
+    let state = emptyStoryFacts();
     const sibling: ExtractedFact = {
       kind: "relationship",
       from: "Ilya",
@@ -38,7 +38,7 @@ describe("applyFact — the merge algebra every extractor shares", () => {
   });
 
   it("appends timeline events in read order and appends only genuinely new facts elsewhere", () => {
-    let state = emptyBible();
+    let state = emptyStoryFacts();
     state = applyFact(state, { kind: "timeline", event: "the compass cracked" });
     state = applyFact(state, { kind: "timeline", event: "the compass cracked" });
     state = applyFact(state, { kind: "timeline", event: "the harbor burned" });

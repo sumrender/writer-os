@@ -1,4 +1,4 @@
-import { canonBeforeOrdinal, snapshotsByOrdinal, type ExtractionSnapshot } from "./extraction-run.js";
+import { factsBeforeOrdinal, snapshotsByOrdinal, type ExtractionSnapshot } from "./extraction-run.js";
 import { renderAssembledContext } from "./assembled-context.js";
 import { gradeBeats } from "./beat-grade.js";
 import type { BeatChapter } from "./beats.js";
@@ -37,16 +37,16 @@ export async function runGenerationCases(
   const results: GenerationCaseResult[] = [];
   for (const chapter of chapters) {
     const throughOrdinal = chapter.ordinal - 1;
-    const bibleStateAsOf = canonBeforeOrdinal(chapter.ordinal, canonByOrdinal);
-    const assembledContext = renderAssembledContext(bibleStateAsOf);
+    const factsAsOf = factsBeforeOrdinal(chapter.ordinal, canonByOrdinal);
+    const assembledContext = renderAssembledContext(factsAsOf);
 
     const generated = await generate(
-      { throughOrdinal, assembledContext, bibleStateAsOf },
+      { throughOrdinal, assembledContext, factsAsOf },
       chapter.mustInclude.length > 0 ? { beats: chapter.mustInclude } : undefined,
     );
 
     const beatGrade = await gradeBeats(generated.text, chapter, judge);
-    const checkResult = await check(bibleStateAsOf, generated.text);
+    const checkResult = await check(factsAsOf, generated.text);
 
     results.push({
       ordinal: chapter.ordinal,

@@ -1,14 +1,14 @@
-import { canonBeforeOrdinal, snapshotsByOrdinal, type ExtractionSnapshot } from "./extraction-run.js";
+import { factsBeforeOrdinal, snapshotsByOrdinal, type ExtractionSnapshot } from "./extraction-run.js";
 import type { Check } from "./pipeline.js";
 import type { PerturbationCase } from "./perturbation-file.js";
 
 /**
  * Runs the checker-under-test against perturbation/control cases
- * (docs/TESTING.md §7). Each case's canon is the bible state established
+ * (docs/TESTING.md §7). Each case's canon is the facts store established
  * strictly *before* its `base_ordinal` chapter — the extraction snapshot
- * after chapter `base_ordinal - 1`, or the empty bible when `base_ordinal`
- * is 1 — so the checker sees only what canon already holds, never the fact
- * the case itself asserts.
+ * after chapter `base_ordinal - 1`, or the empty facts store when
+ * `base_ordinal` is 1 — so the checker sees only what canon already holds,
+ * never the fact the case itself asserts.
  */
 
 export interface CheckerCaseResult {
@@ -27,7 +27,7 @@ export async function runCheckerCases(
 
   const results: CheckerCaseResult[] = [];
   for (const { entry, chapterText } of cases) {
-    const canon = canonBeforeOrdinal(entry.baseOrdinal, canonByOrdinal);
+    const canon = factsBeforeOrdinal(entry.baseOrdinal, canonByOrdinal);
     const result = await check(canon, chapterText);
     results.push({
       caseId: entry.id,

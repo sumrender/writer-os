@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyBible } from "./bible.js";
+import { emptyStoryFacts } from "./story-facts.js";
 import { fakeCheck, fakeExtract, fakeGenerate } from "./fakes.js";
 
 const CH1 = [
@@ -11,7 +11,7 @@ const CH1 = [
 ].join("\n");
 
 describe("fakeExtract", () => {
-  it("parses every sentence template into its bible fact", async () => {
+  it("parses every sentence template into its story fact", async () => {
     const text = [
       CH1,
       "The brass compass rests with Mara Vey.",
@@ -22,7 +22,7 @@ describe("fakeExtract", () => {
       "Style decree — narration: close third person, past tense.",
     ].join("\n");
 
-    const state = await fakeExtract(text, 1, emptyBible());
+    const state = await fakeExtract(text, 1, emptyStoryFacts());
 
     expect(state.characters.map((c) => c.name)).toEqual(["Mara Vey", "Joren Vey"]);
     expect(state.relationships).toEqual([
@@ -46,7 +46,7 @@ describe("fakeExtract", () => {
   });
 
   it("replaces an item's holder instead of appending a second entry", async () => {
-    const after = await fakeExtract("The brass compass rests with Mara Vey.", 2, emptyBible());
+    const after = await fakeExtract("The brass compass rests with Mara Vey.", 2, emptyStoryFacts());
     const state = await fakeExtract("The brass compass rests with Joren Vey.", 4, after);
 
     expect(state.items).toEqual([{ item: "brass compass", holder: "Joren Vey" }]);
@@ -56,7 +56,7 @@ describe("fakeExtract", () => {
     const open = await fakeExtract(
       "The matter of the missing ledger stands open.",
       2,
-      emptyBible(),
+      emptyStoryFacts(),
     );
     const state = await fakeExtract(
       "The matter of the missing ledger stands resolved.",
@@ -71,7 +71,7 @@ describe("fakeExtract", () => {
     const once = await fakeExtract(
       `${CH1}\nIt happened that the harbor bell rang.\nShe watched the water swallow the sun.`,
       1,
-      emptyBible(),
+      emptyStoryFacts(),
     );
     const twice = await fakeExtract(CH1, 2, once);
 
@@ -80,8 +80,8 @@ describe("fakeExtract", () => {
   });
 
   it("is deterministic: identical inputs produce deep-equal states", async () => {
-    const a = await fakeExtract(CH1, 1, emptyBible());
-    const b = await fakeExtract(CH1, 1, emptyBible());
+    const a = await fakeExtract(CH1, 1, emptyStoryFacts());
+    const b = await fakeExtract(CH1, 1, emptyStoryFacts());
 
     expect(a).toEqual(b);
   });
@@ -96,7 +96,7 @@ describe("fakeCheck", () => {
         "Mara Vey is the daughter of Joren Vey.",
       ].join("\n"),
       1,
-      emptyBible(),
+      emptyStoryFacts(),
     );
 
   it("raises no flags for a chapter consistent with canon", async () => {
@@ -135,7 +135,7 @@ describe("fakeGenerate", () => {
   const context = (throughOrdinal: number) => ({
     throughOrdinal,
     assembledContext: `context through chapter ${throughOrdinal}`,
-    bibleStateAsOf: emptyBible(),
+    factsAsOf: emptyStoryFacts(),
   });
 
   it("produces ordinal N+1 with deterministic text and no beats by default", async () => {

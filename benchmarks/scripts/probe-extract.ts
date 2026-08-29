@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { createAgnesClient } from "../dist/lib/agnes-client.js";
 import { createAgnesExtract } from "../dist/lib/agnes-extract.js";
-import { emptyBible, type BibleState } from "../dist/lib/bible.js";
+import { emptyStoryFacts, type StoryFacts } from "../dist/lib/story-facts.js";
 
 const env = Object.fromEntries(
   readFileSync(new URL("../.env", import.meta.url), "utf8")
@@ -40,7 +40,7 @@ if (process.argv[2] === "--book") {
   ) as {
     chapters: readonly { ordinal: number; file: string }[];
   };
-  let state: BibleState = emptyBible();
+  let state: StoryFacts = emptyStoryFacts();
   for (const chapter of manifest.chapters) {
     const text = readFileSync(new URL(`../books/${bookName}/${chapter.file}`, import.meta.url), "utf8");
     try {
@@ -58,7 +58,7 @@ if (process.argv[2] === "--book") {
   const chapterText = readFileSync(new URL(chapterFile, import.meta.url), "utf8");
   const ordinal = Number(/ch(\d+)\.txt$/.exec(chapterFile)?.[1] ?? 1);
   try {
-    const state = await extract(chapterText, ordinal, emptyBible());
+    const state = await extract(chapterText, ordinal, emptyStoryFacts());
     console.log(`chapter ${ordinal}: OK`);
     console.log(JSON.stringify(state, null, 2));
   } catch (error) {

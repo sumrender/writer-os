@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { emptyBible, type BibleState } from "./bible.js";
+import { emptyStoryFacts, type StoryFacts } from "./story-facts.js";
 import { loadAssertionSet } from "./assertion-file.js";
 import { validateBook } from "./manifest.js";
 import { runExtraction, type ExtractionSnapshot } from "./extraction-run.js";
@@ -23,17 +23,17 @@ function loadMiniBook() {
   return { chapters: book.chapters, set: assertions.set };
 }
 
-/** A writable bible for building fixture states in tests. */
-type WritableBible = {
-  -readonly [K in keyof BibleState]: BibleState[K] extends readonly (infer E)[]
+/** A writable facts store for building fixture states in tests. */
+type WritableFacts = {
+  -readonly [K in keyof StoryFacts]: StoryFacts[K] extends readonly (infer E)[]
     ? E[]
-    : BibleState[K];
+    : StoryFacts[K];
 };
 
-function singleState(mutate: (bible: WritableBible) => void): ExtractionSnapshot[] {
-  const bible = structuredClone(emptyBible()) as WritableBible;
-  mutate(bible);
-  return [{ afterOrdinal: 1, bible }];
+function singleState(mutate: (facts: WritableFacts) => void): ExtractionSnapshot[] {
+  const facts = structuredClone(emptyStoryFacts()) as WritableFacts;
+  mutate(facts);
+  return [{ afterOrdinal: 1, facts }];
 }
 
 describe("gradeAssertionSet — deterministic path (no LLM)", () => {
@@ -78,16 +78,16 @@ describe("gradeAssertionSet — deterministic path (no LLM)", () => {
     const graded = await gradeAssertionSet(set, snapshots, createStubJudge());
 
     expect(graded.claimedKeys.size).toBe(11);
-    const claimedRelationships = graded.finalBible.relationships
+    const claimedRelationships = graded.finalFacts.relationships
       .map((r) => entryKey("relationship", r))
       .filter((key) => graded.claimedKeys.has(key));
     expect(claimedRelationships).toHaveLength(1);
     expect(claimedRelationships[0]).toContain("daughter");
   });
 
-  it("marks every unmet must assertion as an omission on an empty bible", async () => {
+  it("marks every unmet must assertion as an omission on an empty facts store", async () => {
     const { set } = loadMiniBook();
-    const snapshots: ExtractionSnapshot[] = [{ afterOrdinal: 4, bible: emptyBible() }];
+    const snapshots: ExtractionSnapshot[] = [{ afterOrdinal: 4, facts: emptyStoryFacts() }];
 
     const graded = await gradeAssertionSet(set, snapshots, createStubJudge());
 
@@ -163,7 +163,7 @@ describe("gradeAssertionSet — judgable fields route to the equivalence judge",
     const graded = await gradeAssertionSet(asSet(noIronShipsAssertion()), snapshots, judge);
 
     expect(graded.graded[0]?.verdict).toBe("pass-exact");
-    const vesselsKey = graded.finalBible.worldRules
+    const vesselsKey = graded.finalFacts.worldRules
       .map((r) => entryKey("world_rule", r))
       .filter((key) => !graded.claimedKeys.has(key));
     expect(vesselsKey).toHaveLength(1);
@@ -206,9 +206,9 @@ describe("gradeAssertionSet — judgable fields route to the equivalence judge",
 describe("gradeAssertionSet — as_of grading window", () => {
   it("grades an as_of assertion against that ordinal's snapshot, not the final state", async () => {
     const snapshots: ExtractionSnapshot[] = [
-      { afterOrdinal: 2, bible: withItem("brass compass", "Mara Vey") },
-      { afterOrdinal: 3, bible: withItem("brass compass", "Mara Vey") },
-      { afterOrdinal: 4, bible: withItem("brass compass", "Joren Vey") },
+      { afterOrdinal: 2, facts: withItem("brass compass", "Mara Vey") },
+      { afterOrdinal: 3, facts: withItem("brass compass", "Mara Vey") },
+      { afterOrdinal: 4, facts: withItem("brass compass", "Joren Vey") },
     ];
 
     const at3 = await gradeAssertionSet(asSet(itemHolderAsOf3()), snapshots, createStubJudge());
@@ -308,8 +308,8 @@ function timelineAssertion(): Assertion {
   };
 }
 
-function withItem(item: string, holder: string): BibleState {
-  const bible = structuredClone(emptyBible()) as WritableBible;
-  bible.items.push({ item, holder });
-  return bible;
+function withItem(item: string, holder: string): StoryFacts {
+  const facts = structuredClone(emptyStoryFacts()) as WritableFacts;
+  facts.items.push({ item, holder });
+  return facts;
 }

@@ -136,7 +136,7 @@ describe("--format events — deterministic mini-book sequence (fake pipeline, s
     expect(completed.evidence).toEqual([]);
   });
 
-  it("carries per-chapter timing, growing Canon entry counts, and full bible snapshots", async () => {
+  it("carries per-chapter timing, growing Canon entry counts, and full facts snapshots", async () => {
     installMiniBook();
     const io = capture();
     await run(
@@ -165,13 +165,13 @@ describe("--format events — deterministic mini-book sequence (fake pipeline, s
       expect(chapter.elapsedMs).toBeTypeOf("number");
       expect(chapter.elapsedMs).toBeGreaterThanOrEqual(0);
     }
-    expect(completedChapters[1]?.bible.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
-    expect(completedChapters[3]?.bible.items).toEqual([
+    expect(completedChapters[1]?.facts.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
+    expect(completedChapters[3]?.facts.items).toEqual([
       { item: "brass compass", holder: "Joren Vey" },
     ]);
   });
 
-  it("run.completed carries the report, the final Story Bible, and every per-ordinal snapshot", async () => {
+  it("run.completed carries the report, the final Story Facts, and every per-ordinal snapshot", async () => {
     installMiniBook();
     const io = capture();
     await run(
@@ -180,25 +180,25 @@ describe("--format events — deterministic mini-book sequence (fake pipeline, s
     );
     const completed = expectType(eventsFrom(io.out), 9, "run.completed");
 
-    const bible = completed.bible;
-    expect(bible.characters.map((c) => c.name)).toEqual(["Mara Vey", "Joren Vey"]);
-    expect(bible.appearances).toEqual([
+    const facts = completed.facts;
+    expect(facts.characters.map((c) => c.name)).toEqual(["Mara Vey", "Joren Vey"]);
+    expect(facts.appearances).toEqual([
       { character: "Mara Vey", attribute: "her coat", contains: "salt-white wool" },
     ]);
-    expect(bible.relationships).toEqual([
+    expect(facts.relationships).toEqual([
       { from: "Mara Vey", to: "Joren Vey", relationType: "daughter" },
       { from: "Joren Vey", to: "Mara Vey", relationType: "father" },
     ]);
-    expect(bible.items).toEqual([{ item: "brass compass", holder: "Joren Vey" }]);
-    expect(bible.threads).toEqual([{ thread: "the missing ledger", status: "resolved" }]);
-    expect(bible.worldRules).toEqual([{ topic: "the northern light burns without oil" }]);
-    expect(bible.timeline).toEqual(["the harbor bell rang", "the ledger burned"]);
-    expect(bible.lexicon).toEqual([{ term: "Vess", lockedSpelling: true }]);
-    expect(bible.style).toEqual([{ field: "narration", value: "close third person, past tense" }]);
+    expect(facts.items).toEqual([{ item: "brass compass", holder: "Joren Vey" }]);
+    expect(facts.threads).toEqual([{ thread: "the missing ledger", status: "resolved" }]);
+    expect(facts.worldRules).toEqual([{ topic: "the northern light burns without oil" }]);
+    expect(facts.timeline).toEqual(["the harbor bell rang", "the ledger burned"]);
+    expect(facts.lexicon).toEqual([{ term: "Vess", lockedSpelling: true }]);
+    expect(facts.style).toEqual([{ field: "narration", value: "close third person, past tense" }]);
 
     expect(completed.snapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
-    expect(completed.snapshots[0]?.bible.characters).toHaveLength(2);
-    expect(completed.snapshots[1]?.bible.threads).toEqual([
+    expect(completed.snapshots[0]?.facts.characters).toHaveLength(2);
+    expect(completed.snapshots[1]?.facts.threads).toEqual([
       { thread: "the missing ledger", status: "open" },
     ]);
   });
@@ -398,7 +398,7 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
     expect(parseBenchmarkEvent(withoutTotal)).toBeNull();
   });
 
-  it("rejects chapter events with invalid ordinals, timings, or bible payloads", () => {
+  it("rejects chapter events with invalid ordinals, timings, or facts payloads", () => {
     expect(
       parseBenchmarkEvent({ type: "chapter.started", ordinal: 0, runIndex: 1 }),
     ).toBeNull();
@@ -411,7 +411,7 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
       runIndex: 1,
       elapsedMs: 5,
       canonEntries: 6,
-      bible: {
+      facts: {
         characters: [{ name: "Mara Vey" }],
         appearances: [],
         relationships: [],
@@ -425,11 +425,11 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
     };
     expect(parseBenchmarkEvent(chapterCompleted)?.type).toBe("chapter.completed");
     expect(parseBenchmarkEvent({ ...chapterCompleted, elapsedMs: -1 })).toBeNull();
-    expect(parseBenchmarkEvent({ ...chapterCompleted, bible: { ...chapterCompleted.bible, threads: "open" } })).toBeNull();
+    expect(parseBenchmarkEvent({ ...chapterCompleted, facts: { ...chapterCompleted.facts, threads: "open" } })).toBeNull();
     expect(
       parseBenchmarkEvent({
         ...chapterCompleted,
-        bible: { ...chapterCompleted.bible, threads: [{ thread: "x", status: "cancelled" }] },
+        facts: { ...chapterCompleted.facts, threads: [{ thread: "x", status: "cancelled" }] },
       }),
     ).toBeNull();
   });
@@ -452,7 +452,7 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
         gates: { checks: [], passed: true },
         passed: true,
       },
-      bible: {
+      facts: {
         characters: [],
         appearances: [],
         relationships: [],

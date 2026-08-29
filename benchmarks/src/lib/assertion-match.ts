@@ -1,10 +1,10 @@
 import type { Assertion } from "./assertions.js";
-import type { BibleState, EntityKind } from "./bible.js";
+import type { StoryFacts, EntityKind } from "./story-facts.js";
 import { entryKey } from "./fact-text.js";
 import type { EquivalenceChecker } from "./judge.js";
 
 /**
- * Assertion-to-bible matching (docs/TESTING.md §6). Deterministic exact
+ * Assertion-to-fact matching (docs/TESTING.md §6). Deterministic exact
  * checks run first; only superficially-differing *judgable* values —
  * relationship types, appearance descriptions, style values, world-rule
  * topics, timeline event wording — route to the equivalence judge.
@@ -20,7 +20,7 @@ import type { EquivalenceChecker } from "./judge.js";
 
 export interface MatchOutcome {
   readonly mode: "exact" | "judged";
-  /** Content keys of the bible entries the match consumed. */
+  /** Content keys of the facts the match consumed. */
   readonly claimedKeys: readonly string[];
 }
 
@@ -32,7 +32,7 @@ const exactMatch = (kind: EntityKind, payload: unknown): MatchOutcome => ({
 /** Finds a match for `assertion` in `state`, or undefined when none exists. */
 export async function findMatch(
   assertion: Assertion,
-  state: BibleState,
+  state: StoryFacts,
   checker: EquivalenceChecker,
 ): Promise<MatchOutcome | undefined> {
   const mayJudge = assertion.expect === "must";

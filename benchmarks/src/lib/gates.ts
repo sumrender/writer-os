@@ -1,4 +1,4 @@
-import { ENTITY_KINDS, type EntityKind } from "./bible.js";
+import { ENTITY_KINDS, type EntityKind } from "./story-facts.js";
 
 /**
  * Run gates (docs/TESTING.md §6): a global precision floor plus per-kind

@@ -1,4 +1,4 @@
-import { canonEntryCount, emptyBible, ENTITY_KINDS, type EntityKind } from "../../lib/bible.js";
+import { emptyStoryFacts, factCount, ENTITY_KINDS, type EntityKind } from "../../lib/story-facts.js";
 import type { AssertionSet } from "../../lib/assertions.js";
 import type { ExtractableChapter } from "../../lib/manifest.js";
 import type { Extract } from "../../lib/pipeline.js";
@@ -103,14 +103,14 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
     log.info(`run ${run + 1}/${runs}: extracting ${input.chapters.length} chapter(s)`);
     const snapshots = await runExtraction(input.chapters, input.extract, log, {
       onChapterStart: (ordinal) => emit?.({ type: "chapter.started", ordinal, runIndex }),
-      onChapterComplete: ({ ordinal, elapsedMs, bible }) =>
+      onChapterComplete: ({ ordinal, elapsedMs, facts }) =>
         emit?.({
           type: "chapter.completed",
           ordinal,
           runIndex,
           elapsedMs,
-          canonEntries: canonEntryCount(bible),
-          bible,
+          canonEntries: factCount(facts),
+          facts,
         }),
     });
     finalSnapshots = snapshots;
@@ -150,7 +150,7 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
 
     log.info(`run ${run + 1}/${runs}: sweeping unmatched facts against source`);
     const sweep = await sweepUnmatchedFacts(
-      gradedExtraction.finalBible,
+      gradedExtraction.finalFacts,
       gradedExtraction.claimedKeys,
       sourceText,
       input.judge,
@@ -211,7 +211,7 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
     type: "run.completed",
     exitCode: exitCodeForPassed(report.passed),
     report,
-    bible: finalSnapshots.at(-1)?.bible ?? emptyBible(),
+    facts: finalSnapshots.at(-1)?.facts ?? emptyStoryFacts(),
     snapshots: finalSnapshots,
     evidence,
   });

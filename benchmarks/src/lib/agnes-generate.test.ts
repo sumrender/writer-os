@@ -22,7 +22,7 @@ describe("createAgnesGenerate", () => {
       {
         throughOrdinal: 10,
         assembledContext: 'canon fact line\nanother fact line',
-        bibleStateAsOf: {
+        factsAsOf: {
           characters: [],
           appearances: [],
           relationships: [],
@@ -60,7 +60,7 @@ describe("createAgnesGenerate", () => {
     await createAgnesGenerate(client)({
       throughOrdinal: 1,
       assembledContext: "(facts)",
-      bibleStateAsOf: {
+      factsAsOf: {
         characters: [],
         appearances: [],
         relationships: [],
