@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import { loadAssertionSet } from "./lib/assertion-file.js";
 import { ASSERTION_KINDS } from "./lib/assertions.js";
 import { validateBook } from "./lib/manifest.js";
-import { fakeExtract } from "./lib/fakes.js";
+import { fakeExtract, fakeSynthesizeBible, fakeSynthesizeChapterSummary } from "./lib/fakes.js";
 import { runExtraction } from "./lib/extraction-run.js";
+import { emptyStoryFacts, type StoryFacts } from "./lib/story-facts.js";
+import type { BibleSnapshot } from "./lib/story-bible.js";
 
 const bookDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -75,6 +77,95 @@ describe("mini-book fixture", () => {
     ]);
     expect(final?.style).toEqual([
       { field: "narration", value: "close third person, past tense" },
+    ]);
+  });
+
+  it("synthesizes a chapter summary and a full bible at every ordinal", async () => {
+    const book = validateBook(bookDir);
+    if (!book.ok) throw new Error("fixture must validate");
+
+    const summaries: { ordinal: number; summary: string }[] = [];
+    const bibleSnapshots: BibleSnapshot[] = [];
+    let factsBefore: StoryFacts = emptyStoryFacts();
+    await runExtraction(book.chapters, fakeExtract, undefined, {
+      onChapterComplete: async ({ ordinal, facts }) => {
+        const chapterText = book.chapters
+          .slice()
+          .sort((a, b) => a.ordinal - b.ordinal)
+          .find((chapter) => chapter.ordinal === ordinal)?.text;
+        if (chapterText === undefined) throw new Error(`no text for ordinal ${ordinal}`);
+        summaries.push(
+          await fakeSynthesizeChapterSummary({ ordinal, text: chapterText, factsSoFar: factsBefore }),
+        );
+        const bible = await fakeSynthesizeBible({
+          chapters: book.chapters
+            .slice()
+            .sort((a, b) => a.ordinal - b.ordinal)
+            .filter((chapter) => chapter.ordinal <= ordinal)
+            .map((chapter) => chapter.text),
+          facts,
+          summaries: [...summaries],
+        });
+        bibleSnapshots.push({ afterOrdinal: ordinal, bible });
+        factsBefore = facts;
+      },
+    });
+
+    // Hand-computed chapter summaries: the facts each chapter's own lines
+    // establish, rendered through the fake grammar's fact text.
+    expect(summaries).toEqual([
+      {
+        ordinal: 1,
+        summary: [
+          'character named "Mara Vey"',
+          'character named "Joren Vey"',
+          '"Mara Vey" — her coat: salt-white wool',
+          '"Mara Vey" is the "daughter" of "Joren Vey"',
+          'location named "the northern light"',
+          "in-world event happened: the harbor bell rang",
+          'style guide sets narration to "close third person, past tense"',
+        ].join("; "),
+      },
+      {
+        ordinal: 2,
+        summary: [
+          'item "brass compass" is held by "Mara Vey"',
+          'plot thread "the missing ledger" stands open',
+          'lexicon term "Vess" (spelling locked)',
+        ].join("; "),
+      },
+      {
+        ordinal: 3,
+        summary: [
+          "world rule: the northern light burns without oil",
+          "in-world event happened: the ledger burned",
+        ].join("; "),
+      },
+      {
+        ordinal: 4,
+        summary: [
+          '"Joren Vey" is the "father" of "Mara Vey"',
+          'item "brass compass" is held by "Joren Vey"',
+          'plot thread "the missing ledger" stands resolved',
+        ].join("; "),
+      },
+    ]);
+
+    expect(bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
+    const finalBible = bibleSnapshots.at(-1)?.bible;
+    expect(finalBible?.chapterSummaries).toEqual(summaries);
+    // Placeholders: every model section ships valid and empty.
+    expect(finalBible?.bookOverview).toBe("");
+    expect(finalBible?.characterProfiles).toEqual([]);
+    expect(finalBible?.locationProfiles).toEqual([]);
+    // The derived graph: Mara Vey is mentioned 5 times, Joren Vey 4.
+    expect(finalBible?.graph.nodes).toEqual([
+      { name: "Mara Vey", importance: 5, role: "protagonist" },
+      { name: "Joren Vey", importance: 4, role: "supporting" },
+    ]);
+    expect(finalBible?.graph.edges).toEqual([
+      { from: "Mara Vey", to: "Joren Vey", relation: "daughter" },
+      { from: "Joren Vey", to: "Mara Vey", relation: "father" },
     ]);
   });
 });

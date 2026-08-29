@@ -7,15 +7,15 @@ Domain language for Writer OS: a SaaS that helps serialized-fiction writers keep
 ### Story & canon
 
 **Story Facts**:
-The graded fact store: atomic, per-chapter, source-verifiable canon facts, versioned as of chapter N. Not a readable document — the readable derivation is the Story Bible.
+The graded fact store: atomic, per-chapter, source-verifiable canon facts, versioned as of chapter N (ADR-0007: the fact layer of the two-layer canon). Not a readable document — the readable derivation is the Story Bible.
 _Avoid_: bible state, fact dump, Story Bible (that is the synthesized document, a different layer)
 
 **Story Bible**:
-The author-facing reference document synthesized from Story Facts plus chapter prose: overview, character and location profiles, chapter summaries, plot-thread rollups, timelines, and more. A derivation, never the store of facts itself.
+The author-facing reference document synthesized from Story Facts plus chapter prose: overview, character and location profiles, chapter summaries, plot-thread rollups, timelines, and more. A derivation, never the store of facts itself (ADR-0007: the synthesized layer of the two-layer canon).
 _Avoid_: lorebook, lore document, bible file
 
 **Canon**:
-The body of facts a story has established, as represented in the Story Facts at a given point in manuscript progress.
+The body of facts a story has established, as represented in the Story Facts at a given point in manuscript progress — the fact layer of the two-layer canon (ADR-0007).
 _Avoid_: lore, truth
 
 **Canon change**:
@@ -51,7 +51,7 @@ The typed, human-verified claims encoding a fixture book's ground truth: facts t
 _Avoid_: golden bible (that rejected form has no polarity or evidence), ground truth file
 
 **Extraction**:
-Building Story Facts incrementally from finished chapter prose, chapter by chapter in manuscript order. Currently benchmark-internal; distinct from the deliberately deferred import feature.
+Building Story Facts incrementally from finished chapter prose, chapter by chapter in manuscript order — the fact layer of the two-layer canon (ADR-0007), graded directly; the Story Bible is synthesized from it, never graded. Currently benchmark-internal; distinct from the deliberately deferred import feature.
 _Avoid_: import (reserved for a future product surface), ingestion
 
 **Fabrication**:

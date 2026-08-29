@@ -5,8 +5,9 @@ import type { StoryFacts } from "./story-facts.js";
  * (deterministic fakes and vendor-backed alike): the semantics of folding an
  * extracted fact into canon state — items, threads, and style replace their
  * prior entries by identity key; relationships replace by endpoint pair;
- * characters dedupe wholly; appearances, world rules, lexicon terms, and
- * timeline events append when genuinely new. Graders depend on this algebra
+ * characters dedupe wholly; locations append when genuinely new by name;
+ * appearances, world rules, lexicon terms, and timeline events append when
+ * genuinely new. Graders depend on this algebra
  * behaving identically regardless of where facts came from.
  */
 
@@ -15,6 +16,7 @@ export type ExtractedFact =
   | ({ readonly kind: "appearance" } & import("./story-facts.js").AppearanceEntry)
   | ({ readonly kind: "relationship" } & import("./story-facts.js").RelationshipEntry)
   | ({ readonly kind: "item" } & import("./story-facts.js").ItemEntry)
+  | ({ readonly kind: "location" } & import("./story-facts.js").LocationEntry)
   | ({ readonly kind: "thread" } & import("./story-facts.js").ThreadEntry)
   | ({ readonly kind: "world_rule" } & import("./story-facts.js").WorldRuleEntry)
   | { readonly kind: "timeline"; readonly event: string }
@@ -28,6 +30,18 @@ function serializedEqual(a: unknown, b: unknown): boolean {
 
 function appendIfNew<T>(list: readonly T[], entry: T): T[] {
   return list.some((existing) => serializedEqual(existing, entry))
+    ? [...list]
+    : [...list, entry];
+}
+
+/** Appends unless an entry with the same identity key already exists; the
+ * first occurrence wins and later same-key entries never replace it. */
+function appendIfNewBy<T>(
+  list: readonly T[],
+  entry: T,
+  identity: (entry: T) => string,
+): T[] {
+  return list.some((existing) => identity(existing) === identity(entry))
     ? [...list]
     : [...list, entry];
 }
@@ -76,6 +90,11 @@ export function applyFact(facts: StoryFacts, fact: ExtractedFact): StoryFacts {
           { item: fact.item, holder: fact.holder },
           (i) => i.item,
         ),
+      };
+    case "location":
+      return {
+        ...facts,
+        locations: appendIfNewBy(facts.locations, { name: fact.name }, (l) => l.name),
       };
     case "thread":
       return {

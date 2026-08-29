@@ -268,6 +268,35 @@ assertions:
     note: The gold is recovered after Injun Joe dies sealed in the cave; a
       post-mortem holder attribution is fabrication.
 
+  # --- location ---
+  # Names below match the source spelling exactly, including curly apostrophes.
+  - id: loc-st-petersburg
+    kind: location
+    expect: must
+    name: St. Petersburg
+    evidence: [1]
+
+  - id: loc-jacksons-island
+    kind: location
+    expect: must
+    name: Jackson’s Island
+    evidence: [13]
+
+  - id: loc-mcdougals-cave
+    kind: location
+    expect: must
+    name: McDougal’s cave
+    evidence: [29]
+
+  # negative probe: the river setting invites downstream-city confusions
+  - id: loc-not-new-orleans
+    kind: location
+    expect: must_not
+    name: New Orleans
+    evidence: [13]
+    note: The Mississippi setting makes a downstream city a plausible confusion;
+      the story never establishes New Orleans as a scene.
+
   # --- thread ---
   - id: thread-injun-joe-menace
     kind: thread

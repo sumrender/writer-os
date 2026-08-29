@@ -52,6 +52,11 @@ export interface ItemAssertion extends CommonFields {
   readonly holder: string;
 }
 
+export interface LocationAssertion extends CommonFields {
+  readonly kind: "location";
+  readonly name: string;
+}
+
 export interface ThreadAssertion extends CommonFields {
   readonly kind: "thread";
   readonly thread: string;
@@ -85,6 +90,7 @@ export type Assertion =
   | AppearanceAssertion
   | RelationshipAssertion
   | ItemAssertion
+  | LocationAssertion
   | ThreadAssertion
   | WorldRuleAssertion
   | TimelineAssertion
@@ -128,6 +134,7 @@ const KIND_FIELD_NAMES: Record<AssertionKind, readonly string[]> = {
   appearance: ["character", "attribute", "contains"],
   relationship: ["from", "to", "type"],
   item: ["item", "holder"],
+  location: ["name"],
   thread: ["thread", "status"],
   world_rule: ["topic"],
   timeline: ["sequence"],
@@ -412,6 +419,14 @@ function buildAssertion(
         return undefined;
       }
       return { ...common, kind, item, holder };
+    }
+    case "location": {
+      const name = entry.name;
+      if (!nonEmptyString(name)) {
+        failMissing(where, ["name"], entry, fail);
+        return undefined;
+      }
+      return { ...common, kind, name };
     }
     case "thread": {
       const thread = entry.thread;

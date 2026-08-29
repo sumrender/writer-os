@@ -9,6 +9,13 @@ import type { Expectation } from "../lib/assertions.js";
 import type { ExtractionSnapshot } from "../lib/extraction-run.js";
 import type { GateCheck, GateEvaluation } from "../lib/gates.js";
 import type { Stats } from "../lib/metrics.js";
+import type {
+  BibleSnapshot,
+  ChapterSummaryEntry,
+  GraphData,
+  StoryBible,
+} from "../lib/story-bible.js";
+import { SYNTHESIS_STRATEGIES, type SynthesisStrategy } from "../lib/pipeline.js";
 import { isPlainObject, nonEmptyString, positiveInt } from "../lib/schema-primitives.js";
 import type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extraction-axis.js";
 
@@ -18,6 +25,7 @@ import type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extra
  * list the Story Facts viewer groups by.
  */
 export { ENTITY_KINDS } from "../lib/story-facts.js";
+export { SYNTHESIS_STRATEGIES } from "../lib/pipeline.js";
 export { isPlainObject, nonEmptyString, positiveInt } from "../lib/schema-primitives.js";
 export { AXES, JUDGES, PIPELINES } from "./types.js";
 export type { Axis, JudgeKind, PipelineKind } from "./types.js";
@@ -26,6 +34,17 @@ export type { Expectation } from "../lib/assertions.js";
 export type { ExtractionSnapshot } from "../lib/extraction-run.js";
 export type { GateCheck, GateEvaluation } from "../lib/gates.js";
 export type { Stats } from "../lib/metrics.js";
+export type {
+  StoryBible,
+  ModelSections,
+  ModelSectionKey,
+  BibleSnapshot,
+  ChapterSummaryEntry,
+  GraphData,
+  GraphNode,
+  GraphEdge,
+} from "../lib/story-bible.js";
+export type { SynthesisStrategy } from "../lib/pipeline.js";
 export type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extraction-axis.js";
 
 /**
@@ -61,6 +80,12 @@ export interface ChapterCompletedEvent {
   readonly canonEntries: number;
   /** The full Story Facts snapshot after this chapter. */
   readonly facts: StoryFacts;
+  /** The synthesized summary of this chapter (issue #14). */
+  readonly chapterSummary: string;
+  /** The full Story Bible as of this chapter (issue #14). */
+  readonly bible: StoryBible;
+  /** The synthesis strategy used, stamped for transparency (issue #14). */
+  readonly synthesis: SynthesisStrategy;
 }
 
 /** One missed (`omission`) or violated (`fabrication`) assertion, per run. */
@@ -82,6 +107,12 @@ export interface RunCompletedEvent {
   /** Every per-ordinal snapshot of the final run ("as of chapter N"). */
   readonly snapshots: readonly ExtractionSnapshot[];
   readonly evidence: readonly ExtractionEvidenceLine[];
+  /** The final Story Bible of the last run (issue #14). */
+  readonly bible: StoryBible;
+  /** Every per-ordinal bible snapshot of the final run (issue #14). */
+  readonly bibleSnapshots: readonly BibleSnapshot[];
+  /** The synthesis strategy used, stamped for transparency (issue #14). */
+  readonly synthesis: SynthesisStrategy;
 }
 
 export interface RunFailedEvent {
@@ -207,6 +238,11 @@ const parseItem: Parser<StoryFacts["items"][number]> = recordWith((r) => {
   return item !== null && holder !== null ? { item, holder } : null;
 });
 
+const parseLocation: Parser<StoryFacts["locations"][number]> = recordWith((r) => {
+  const name = required(r, "name", parseNonEmptyString);
+  return name !== null ? { name } : null;
+});
+
 const parseThread: Parser<StoryFacts["threads"][number]> = recordWith((r) => {
   const thread = required(r, "thread", parseString);
   const status = required(r, "status", parseThreadStatus);
@@ -235,6 +271,7 @@ export const parseStoryFacts: Parser<StoryFacts> = recordWith((r) => {
   const appearances = required(r, "appearances", (v) => parseArray(v, parseAppearance));
   const relationships = required(r, "relationships", (v) => parseArray(v, parseRelationship));
   const items = required(r, "items", (v) => parseArray(v, parseItem));
+  const locations = required(r, "locations", (v) => parseArray(v, parseLocation));
   const threads = required(r, "threads", (v) => parseArray(v, parseThread));
   const worldRules = required(r, "worldRules", (v) => parseArray(v, parseWorldRule));
   const timeline = required(r, "timeline", (v) => parseArray(v, parseString));
@@ -245,6 +282,7 @@ export const parseStoryFacts: Parser<StoryFacts> = recordWith((r) => {
     appearances === null ||
     relationships === null ||
     items === null ||
+    locations === null ||
     threads === null ||
     worldRules === null ||
     timeline === null ||
@@ -253,13 +291,156 @@ export const parseStoryFacts: Parser<StoryFacts> = recordWith((r) => {
   ) {
     return null;
   }
-  return { characters, appearances, relationships, items, threads, worldRules, timeline, lexicon, style };
+  return {
+    characters,
+    appearances,
+    relationships,
+    items,
+    locations,
+    threads,
+    worldRules,
+    timeline,
+    lexicon,
+    style,
+  };
 });
 
 const parseSnapshot: Parser<ExtractionSnapshot> = recordWith((r) => {
   const afterOrdinal = required(r, "afterOrdinal", parsePositiveInt);
   const facts = required(r, "facts", parseStoryFacts);
   return afterOrdinal !== null && facts !== null ? { afterOrdinal, facts } : null;
+});
+
+/* Story Bible wire parsers (issue #14) — every member required, strict. */
+
+const parseSynthesisStrategy: Parser<SynthesisStrategy> = oneOf(SYNTHESIS_STRATEGIES);
+
+const parseChapterSummary: Parser<ChapterSummaryEntry> = recordWith((r) => {
+  const ordinal = required(r, "ordinal", parsePositiveInt);
+  const summary = required(r, "summary", parseString);
+  return ordinal !== null && summary !== null ? { ordinal, summary } : null;
+});
+
+const parseWorldNote: Parser<StoryBible["world"][number]> = recordWith((r) => {
+  const topic = required(r, "topic", parseNonEmptyString);
+  const note = required(r, "note", parseString);
+  return topic !== null && note !== null ? { topic, note } : null;
+});
+
+const parseProfile: Parser<StoryBible["characterProfiles"][number]> = recordWith((r) => {
+  const name = required(r, "name", parseNonEmptyString);
+  const profile = required(r, "profile", parseString);
+  return name !== null && profile !== null ? { name, profile } : null;
+});
+
+const parseThreadRollup: Parser<StoryBible["threadRollups"][number]> = recordWith((r) => {
+  const thread = required(r, "thread", parseNonEmptyString);
+  const status = required(r, "status", parseThreadStatus);
+  const rollup = required(r, "rollup", parseString);
+  return thread !== null && status !== null && rollup !== null ? { thread, status, rollup } : null;
+});
+
+const parseNamedDescription: Parser<StoryBible["groups"][number]> = recordWith((r) => {
+  const name = required(r, "name", parseNonEmptyString);
+  const description = required(r, "description", parseString);
+  return name !== null && description !== null ? { name, description } : null;
+});
+
+const parseLexiconNote: Parser<StoryBible["lexiconNotes"][number]> = recordWith((r) => {
+  const term = required(r, "term", parseNonEmptyString);
+  const note = required(r, "note", parseString);
+  return term !== null && note !== null ? { term, note } : null;
+});
+
+const parseOpenLoop: Parser<StoryBible["openLoops"][number]> = recordWith((r) => {
+  const description = required(r, "description", parseNonEmptyString);
+  const openedAtOrdinal = required(r, "openedAtOrdinal", parsePositiveInt);
+  return description !== null && openedAtOrdinal !== null ? { description, openedAtOrdinal } : null;
+});
+
+const parseStyleField: Parser<StoryBible["styleRollup"][number]> = recordWith((r) => {
+  const field = required(r, "field", parseNonEmptyString);
+  const value = required(r, "value", parseString);
+  return field !== null && value !== null ? { field, value } : null;
+});
+
+const parseGraphNode: Parser<GraphData["nodes"][number]> = recordWith((r) => {
+  const name = required(r, "name", parseNonEmptyString);
+  const importance = required(r, "importance", parseNonNegativeInt);
+  const role = required(r, "role", oneOf(["protagonist", "supporting"] as const));
+  return name !== null && importance !== null && role !== null ? { name, importance, role } : null;
+});
+
+const parseGraphEdge: Parser<GraphData["edges"][number]> = recordWith((r) => {
+  const from = required(r, "from", parseNonEmptyString);
+  const to = required(r, "to", parseNonEmptyString);
+  const relation = required(r, "relation", parseNonEmptyString);
+  return from !== null && to !== null && relation !== null ? { from, to, relation } : null;
+});
+
+const parseGraphData: Parser<GraphData> = recordWith((r) => {
+  const nodes = required(r, "nodes", (v) => parseArray(v, parseGraphNode));
+  const edges = required(r, "edges", (v) => parseArray(v, parseGraphEdge));
+  return nodes !== null && edges !== null ? { nodes, edges } : null;
+});
+
+const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
+  const bookOverview = required(r, "bookOverview", parseString);
+  const world = required(r, "world", (v) => parseArray(v, parseWorldNote));
+  const characterProfiles = required(r, "characterProfiles", (v) => parseArray(v, parseProfile));
+  const locationProfiles = required(r, "locationProfiles", (v) => parseArray(v, parseProfile));
+  const threadRollups = required(r, "threadRollups", (v) => parseArray(v, parseThreadRollup));
+  const groups = required(r, "groups", (v) => parseArray(v, parseNamedDescription));
+  const itemsOfSignificance = required(r, "itemsOfSignificance", (v) =>
+    parseArray(v, parseNamedDescription),
+  );
+  const lexiconNotes = required(r, "lexiconNotes", (v) => parseArray(v, parseLexiconNote));
+  const openLoops = required(r, "openLoops", (v) => parseArray(v, parseOpenLoop));
+  const styleRollup = required(r, "styleRollup", (v) => parseArray(v, parseStyleField));
+  const worldTimeline = required(r, "worldTimeline", (v) => parseArray(v, parseNonEmptyString));
+  const bookTimeline = required(r, "bookTimeline", (v) => parseArray(v, parseNonEmptyString));
+  const chapterSummaries = required(r, "chapterSummaries", (v) => parseArray(v, parseChapterSummary));
+  const graph = required(r, "graph", parseGraphData);
+  if (
+    bookOverview === null ||
+    world === null ||
+    characterProfiles === null ||
+    locationProfiles === null ||
+    threadRollups === null ||
+    groups === null ||
+    itemsOfSignificance === null ||
+    lexiconNotes === null ||
+    openLoops === null ||
+    styleRollup === null ||
+    worldTimeline === null ||
+    bookTimeline === null ||
+    chapterSummaries === null ||
+    graph === null
+  ) {
+    return null;
+  }
+  return {
+    bookOverview,
+    world,
+    characterProfiles,
+    locationProfiles,
+    threadRollups,
+    groups,
+    itemsOfSignificance,
+    lexiconNotes,
+    openLoops,
+    styleRollup,
+    worldTimeline,
+    bookTimeline,
+    chapterSummaries,
+    graph,
+  };
+});
+
+const parseBibleSnapshot: Parser<BibleSnapshot> = recordWith((r) => {
+  const afterOrdinal = required(r, "afterOrdinal", parsePositiveInt);
+  const bible = required(r, "bible", parseStoryBible);
+  return afterOrdinal !== null && bible !== null ? { afterOrdinal, bible } : null;
 });
 
 const parseKindReport: Parser<KindReport> = recordWith((r) => {
@@ -376,8 +557,18 @@ export function parseBenchmarkEvent(value: unknown): BenchmarkEvent | null {
       const elapsedMs = required(record, "elapsedMs", parseNonNegativeInt);
       const canonEntries = required(record, "canonEntries", parseNonNegativeInt);
       const facts = required(record, "facts", parseStoryFacts);
-      return ordinal !== null && runIndex !== null && elapsedMs !== null && canonEntries !== null && facts !== null
-        ? { type, ordinal, runIndex, elapsedMs, canonEntries, facts }
+      const chapterSummary = required(record, "chapterSummary", parseString);
+      const bible = required(record, "bible", parseStoryBible);
+      const synthesis = required(record, "synthesis", parseSynthesisStrategy);
+      return ordinal !== null &&
+        runIndex !== null &&
+        elapsedMs !== null &&
+        canonEntries !== null &&
+        facts !== null &&
+        chapterSummary !== null &&
+        bible !== null &&
+        synthesis !== null
+        ? { type, ordinal, runIndex, elapsedMs, canonEntries, facts, chapterSummary, bible, synthesis }
         : null;
     }
     case "run.completed": {
@@ -386,8 +577,20 @@ export function parseBenchmarkEvent(value: unknown): BenchmarkEvent | null {
       const facts = required(record, "facts", parseStoryFacts);
       const snapshots = required(record, "snapshots", (v) => parseArray(v, parseSnapshot));
       const evidence = required(record, "evidence", (v) => parseArray(v, parseEvidenceLine));
-      return exitCode !== null && report !== null && facts !== null && snapshots !== null && evidence !== null
-        ? { type, exitCode, report, facts, snapshots, evidence }
+      const bible = required(record, "bible", parseStoryBible);
+      const bibleSnapshots = required(record, "bibleSnapshots", (v) =>
+        parseArray(v, parseBibleSnapshot),
+      );
+      const synthesis = required(record, "synthesis", parseSynthesisStrategy);
+      return exitCode !== null &&
+        report !== null &&
+        facts !== null &&
+        snapshots !== null &&
+        evidence !== null &&
+        bible !== null &&
+        bibleSnapshots !== null &&
+        synthesis !== null
+        ? { type, exitCode, report, facts, snapshots, evidence, bible, bibleSnapshots, synthesis }
         : null;
     }
     case "run.failed": {

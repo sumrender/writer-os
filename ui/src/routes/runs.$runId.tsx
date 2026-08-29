@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import type {
   BenchmarkEvent,
+  BibleSnapshot,
+  StoryBible,
   StoryFacts,
+  SynthesisStrategy,
   ExtractionAxisReport,
   ExtractionEvidenceLine,
   ExtractionSnapshot,
@@ -10,7 +13,9 @@ import type {
 import { cancelRun, getRun } from "../server/functions.js";
 import { StatusBadge } from "../components/StatusBadge.js";
 import { StoryFacts as StoryFactsViewer } from "../components/StoryFacts.js";
+import { StoryBible as StoryBibleViewer } from "../components/StoryBible.js";
 import { ReportView } from "../components/ReportView.js";
+import { buildSnapshotOptions } from "../shared/run-snapshots.js";
 import { elapsed } from "../shared/format.js";
 
 export const Route = createFileRoute("/runs/$runId")({
@@ -33,9 +38,12 @@ interface RunViewModel {
   readonly runs: number | null;
   readonly chapters: ChapterRow[];
   readonly liveFacts: StoryFacts | null;
+  readonly liveBible: StoryBible | null;
   readonly report: ExtractionAxisReport | null;
   readonly finalFacts: StoryFacts | null;
   readonly snapshots: readonly ExtractionSnapshot[];
+  readonly bibleSnapshots: readonly BibleSnapshot[];
+  readonly synthesis: SynthesisStrategy | null;
   readonly evidence: readonly ExtractionEvidenceLine[];
   readonly failure: { exitCode: number; message: string } | null;
 }
@@ -48,9 +56,12 @@ function reduceEvents(events: readonly BenchmarkEvent[]): RunViewModel {
     runs: null,
     chapters: [],
     liveFacts: null,
+    liveBible: null,
     report: null,
     finalFacts: null,
     snapshots: [],
+    bibleSnapshots: [],
+    synthesis: null,
     evidence: [],
     failure: null,
   };
@@ -68,11 +79,14 @@ function reduceEvents(events: readonly BenchmarkEvent[]): RunViewModel {
           canonEntries: event.canonEntries,
         });
         model.liveFacts = event.facts;
+        model.liveBible = event.bible;
         break;
       case "run.completed":
         model.report = event.report;
         model.finalFacts = event.facts;
         model.snapshots = event.snapshots;
+        model.bibleSnapshots = event.bibleSnapshots;
+        model.synthesis = event.synthesis;
         model.evidence = event.evidence;
         break;
       case "run.failed":
@@ -187,7 +201,7 @@ function RunDetail() {
 
       {model.report !== null && <ReportView report={model.report} evidence={model.evidence} />}
 
-      <FactsSection model={model} />
+      <SnapshotSection model={model} />
 
       <EventLog events={events} stderr={stderr} />
     </div>
@@ -254,26 +268,18 @@ function Progress({
   );
 }
 
-function FactsSection({ model }: { model: RunViewModel }) {
-  const options = useMemo(() => {
-    const list: Array<{ key: string; label: string; facts: StoryFacts }> = [];
-    for (const snapshot of model.snapshots) {
-      list.push({
-        key: `snap-${snapshot.afterOrdinal}`,
-        label: `as of chapter ${snapshot.afterOrdinal}`,
-        facts: snapshot.facts,
-      });
-    }
-    if (model.snapshots.length === 0 && model.liveFacts !== null) {
-      const last = model.chapters[model.chapters.length - 1];
-      list.push({
-        key: "live",
-        label: last ? `live · after chapter ${last.ordinal}` : "live",
-        facts: model.liveFacts,
-      });
-    }
-    return list;
-  }, [model]);
+function SnapshotSection({ model }: { model: RunViewModel }) {
+  const options = useMemo(
+    () =>
+      buildSnapshotOptions({
+        snapshots: model.snapshots,
+        bibleSnapshots: model.bibleSnapshots,
+        liveFacts: model.liveFacts,
+        liveBible: model.liveBible,
+        lastChapterOrdinal: model.chapters.at(-1)?.ordinal ?? null,
+      }),
+    [model],
+  );
 
   const [selected, setSelected] = useState<string | null>(null);
   const activeKey = selected ?? options[options.length - 1]?.key ?? null;
@@ -282,7 +288,7 @@ function FactsSection({ model }: { model: RunViewModel }) {
   return (
     <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-zinc-200">Story Facts</h3>
+        <h3 className="text-sm font-semibold text-zinc-200">Story Facts &amp; Story Bible</h3>
         {options.length > 1 && (
           <select
             className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm"
@@ -302,7 +308,25 @@ function FactsSection({ model }: { model: RunViewModel }) {
           {model.report === null ? "Waiting for the first chapter…" : "No Story Facts produced."}
         </p>
       ) : (
-        <StoryFactsViewer facts={active.facts} />
+        <div className="space-y-8">
+          {active.facts !== null && (
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Story Facts
+              </h4>
+              <StoryFactsViewer facts={active.facts} />
+            </div>
+          )}
+          {active.bible !== null && (
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Story Bible
+                {model.synthesis !== null ? ` · ${model.synthesis} synthesis` : ""}
+              </h4>
+              <StoryBibleViewer bible={active.bible} />
+            </div>
+          )}
+        </div>
       )}
     </section>
   );

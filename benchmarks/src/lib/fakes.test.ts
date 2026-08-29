@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyStoryFacts } from "./story-facts.js";
-import { fakeCheck, fakeExtract, fakeGenerate } from "./fakes.js";
+import { fakeCheck, fakeExtract, fakeGenerate, fakeSynthesizeBible, fakeSynthesizeChapterSummary } from "./fakes.js";
+import { fakeModelSections } from "./bible-sections.js";
 
 const CH1 = [
   "Introducing Mara Vey, keeper of the northern light.",
@@ -20,6 +21,7 @@ describe("fakeExtract", () => {
       "It happened that the harbor bell rang.",
       'Say always "Vess", never otherwise.',
       "Style decree — narration: close third person, past tense.",
+      "The scene is set in the northern light.",
     ].join("\n");
 
     const state = await fakeExtract(text, 1, emptyStoryFacts());
@@ -32,6 +34,7 @@ describe("fakeExtract", () => {
       { character: "Mara Vey", attribute: "her coat", contains: "salt-white wool" },
     ]);
     expect(state.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
+    expect(state.locations).toEqual([{ name: "the northern light" }]);
     expect(state.threads).toEqual([
       { thread: "the missing ledger", status: "open" },
     ]);
@@ -152,5 +155,74 @@ describe("fakeGenerate", () => {
     });
     expect(chapter.text).toContain("Mara signs the ledger");
     expect(chapter.text).toContain("the bell rings twice");
+  });
+});
+
+describe("fakeSynthesizeChapterSummary", () => {
+  it("renders only the chapter's own facts, joined with '; '", async () => {
+    const summary = await fakeSynthesizeChapterSummary({
+      ordinal: 1,
+      text: CH1,
+      factsSoFar: emptyStoryFacts(),
+    });
+    expect(summary).toEqual({
+      ordinal: 1,
+      summary: [
+        'character named "Mara Vey"',
+        'character named "Joren Vey"',
+        '"Mara Vey" — her coat: salt-white wool',
+        '"Mara Vey" is the "daughter" of "Joren Vey"',
+      ].join("; "),
+    });
+  });
+
+  it("summarizes a chapter establishing nothing as the empty string", async () => {
+    const summary = await fakeSynthesizeChapterSummary({
+      ordinal: 5,
+      text: "She watched the water swallow the sun.",
+      factsSoFar: emptyStoryFacts(),
+    });
+    expect(summary).toEqual({ ordinal: 5, summary: "" });
+  });
+
+  it("applies within-chapter replace semantics (holder swap)", async () => {
+    const summary = await fakeSynthesizeChapterSummary({
+      ordinal: 4,
+      text: "The brass compass rests with Mara Vey.\nThe brass compass rests with Joren Vey.",
+      factsSoFar: emptyStoryFacts(),
+    });
+    expect(summary.summary).toBe('item "brass compass" is held by "Joren Vey"');
+  });
+
+  it("is deterministic", async () => {
+    const input = { ordinal: 1, text: CH1, factsSoFar: emptyStoryFacts() };
+    expect(await fakeSynthesizeChapterSummary(input)).toEqual(
+      await fakeSynthesizeChapterSummary(input),
+    );
+  });
+});
+
+describe("fakeSynthesizeBible", () => {
+  it("carries the summaries and derives the graph, leaving sections as empty placeholders", async () => {
+    const chapters = [
+      "Introducing Mara Vey, keeper of the northern light.",
+      "Introducing Joren Vey, once keeper before her.",
+    ];
+    const facts = await fakeExtract(chapters.join("\n"), 2, emptyStoryFacts());
+    const summaries = [
+      { ordinal: 1, summary: "Mara keeps the light." },
+      { ordinal: 2, summary: "Joren arrives." },
+    ];
+
+    const bible = await fakeSynthesizeBible({ chapters, facts, summaries });
+
+    expect(bible.chapterSummaries).toEqual(summaries);
+    const { chapterSummaries: _carried, graph, ...sections } = bible;
+    expect(sections).toEqual(fakeModelSections());
+    expect(graph.nodes).toEqual([
+      { name: "Mara Vey", importance: 1, role: "protagonist" },
+      { name: "Joren Vey", importance: 1, role: "supporting" },
+    ]);
+    expect(graph.edges).toEqual([]);
   });
 });

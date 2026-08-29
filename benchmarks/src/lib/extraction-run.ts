@@ -11,11 +11,15 @@ export interface ExtractionSnapshot {
 /** Per-chapter progress hook the extraction loop calls around each extract. */
 export interface ExtractionProgress {
   onChapterStart?(ordinal: number): void;
+  /**
+   * May be async; the loop awaits it so per-chapter synthesis (issue #14)
+   * completes before the run proceeds without re-ordering the protocol.
+   */
   onChapterComplete?(info: {
     ordinal: number;
     elapsedMs: number;
     facts: StoryFacts;
-  }): void;
+  }): void | Promise<void>;
 }
 
 /**
@@ -55,7 +59,7 @@ export async function runExtraction(
     log.info(
       `  chapter ${chapter.ordinal}: extracted in ${elapsed}ms (${totals} canon entries total)`,
     );
-    progress?.onChapterComplete?.({ ordinal: chapter.ordinal, elapsedMs: elapsed, facts: state });
+    await progress?.onChapterComplete?.({ ordinal: chapter.ordinal, elapsedMs: elapsed, facts: state });
     snapshots.push({ afterOrdinal: chapter.ordinal, facts: state });
   }
 

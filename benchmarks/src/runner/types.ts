@@ -34,6 +34,14 @@ export type Format = (typeof FORMATS)[number];
 export const PIPELINES = ["live", "fake"] as const;
 export type PipelineKind = (typeof PIPELINES)[number];
 
+/**
+ * Bible synthesis strategies (issue #14). Defined beside the Synthesize port
+ * in lib/pipeline.ts; re-exported here so the runner vocabulary stays one
+ * import away.
+ */
+export { SYNTHESIS_STRATEGIES } from "../lib/pipeline.js";
+export type { SynthesisStrategy } from "../lib/pipeline.js";
+
 export const LOG_LEVELS = ["off", "info", "debug"] as const;
 
 /**
@@ -47,4 +55,6 @@ export interface RunCliOverrides {
   judgeCachePath?: string;
   /** Injected by tests so extraction cache writes never leave the sandbox. */
   extractCachePath?: string;
+  /** Injected by tests so synthesis cache writes never leave the sandbox. */
+  synthesisCachePath?: string;
 }

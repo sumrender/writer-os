@@ -1,16 +1,23 @@
 import {
   THREAD_STATUSES,
+  emptyStoryFacts,
   type StoryFacts,
   type ThreadStatus,
 } from "./story-facts.js";
+import { emptyStoryBible, storyBibleFromSections } from "./story-bible.js";
 import type {
   Check,
   CheckResult,
   Extract,
   Generate,
   GeneratedChapter,
+  SynthesizeBible,
+  SynthesizeChapterSummary,
 } from "./pipeline.js";
 import { applyFact, type ExtractedFact } from "./fact-merge.js";
+import { storyFacts } from "./fact-text.js";
+import { fakeModelSections } from "./bible-sections.js";
+import { deriveGraphData } from "./bible-graph.js";
 
 /**
  * Rule-based deterministic pipeline fakes. The mini-book fixture
@@ -22,6 +29,7 @@ import { applyFact, type ExtractedFact } from "./fact-merge.js";
  *   <A> is known for <attribute>: <contains>.            → appearance
  *   <A> is the <relation> of <B>.                        → relationship
  *   The <item> rests with <holder>.                      → item (holder replaces)
+ *   The scene is set in <place>.                         → location (append-when-new by name)
  *   The matter of <thread> stands open|resolved|dormant. → thread (status replaces)
  *   In this world, <topic>.                              → world_rule
  *   It happened that <event>.                            → timeline (appended in read order)
@@ -87,6 +95,10 @@ const RULES: readonly FactRule[] = [
     fact: (m) => ({ kind: "item", item: group(m, 1).trim(), holder: group(m, 2) }),
   },
   {
+    pattern: new RegExp(`^The scene is set in (${FREE}?)\\.$`),
+    fact: (m) => ({ kind: "location", name: group(m, 1).trim() }),
+  },
+  {
     pattern: /^The matter of (.+?) stands (.+?)\.$/,
     fact: (m) => {
       const status = group(m, 2);
@@ -120,7 +132,12 @@ const RULES: readonly FactRule[] = [
   },
 ];
 
-function parseFacts(text: string): ExtractedFact[] {
+/**
+ * The fake grammar's line-level fact parser, exported for the fake chapter
+ * summary: a summary of a chapter is the facts THAT chapter establishes,
+ * rendered through the same fact-text currency as extraction.
+ */
+export function parseFacts(text: string): ExtractedFact[] {
   const facts: ExtractedFact[] = [];
   for (const line of text.split(/\r?\n/).map((line) => line.trim())) {
     if (line.length === 0) continue;
@@ -137,7 +154,6 @@ function parseFacts(text: string): ExtractedFact[] {
 
 export const fakeExtract: Extract = async (chapterText, _ordinal, factsSoFar) =>
   parseFacts(chapterText).reduce((state, fact) => applyFact(state, fact), factsSoFar);
-
 export const fakeCheck: Check = async (
   factsAsOf,
   chapterText,
@@ -204,3 +220,20 @@ export const fakeGenerate: Generate = async (context, intent) => {
   const chapter: GeneratedChapter = { ordinal, text: `${lines.join("\n")}\n` };
   return chapter;
 };
+
+export const fakeSynthesizeChapterSummary: SynthesizeChapterSummary = async ({
+  ordinal,
+  text,
+}) => {
+  const chapterFacts = parseFacts(text).reduce(
+    (state, fact) => applyFact(state, fact),
+    emptyStoryFacts(),
+  );
+  const summary = storyFacts(chapterFacts)
+    .map((fact) => fact.text)
+    .join("; ");
+  return { ordinal, summary };
+};
+
+export const fakeSynthesizeBible: SynthesizeBible = async ({ chapters, facts, summaries }) =>
+  storyBibleFromSections(fakeModelSections(), summaries, deriveGraphData({ facts, chapterTexts: chapters }));

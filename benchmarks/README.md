@@ -65,10 +65,12 @@ Two ways to launch (same plumbing, same exit codes):
 
 Fixture-side machinery beside `src/lib/`:
 
-- `lib/assertions.ts` — typed assertion-set schema (nine entity kinds, `must`/`must_not`, `as_of`, evidence) with a validator that rejects malformed sets precisely
+- `lib/assertions.ts` — typed assertion-set schema (ten entity kinds, `must`/`must_not`, `as_of`, evidence) with a validator that rejects malformed sets precisely
 - `lib/assertion-file.ts` — loads and validates a book's `assertions.yml`
-- `lib/pipeline.ts` — the pipeline-under-test port: `extract(chapterText, ordinal, factsSoFar)`, `check(factsAsOf, chapterText)`, `generate(context, intent?)`, all strict-structured on both boundaries
-- `lib/fakes.ts` — deterministic rule-based implementations of all three ops
+- `lib/pipeline.ts` — the pipeline-under-test port: `extract(chapterText, ordinal, factsSoFar)`, `check(factsAsOf, chapterText)`, `generate(context, intent?)`, `synthesizeChapterSummary({ordinal, text, factsSoFar})`, `synthesizeBible({chapters, facts, summaries})`, all strict-structured on both boundaries
+- `lib/fakes.ts` — deterministic rule-based implementations of every port op
+- `lib/story-bible.ts` / `lib/bible-sections.ts` / `lib/bible-graph.ts` — the synthesized Story Bible layer (issue #14, ADR-0007): the full sectioned document type, the composition machinery (per-section instruction blocks + validators + fakes assembled into the master prompt, `validateBible`, and the dual `per-section`/`monolithic` strategies), and the deterministic relationship-graph derivation from facts
+- `lib/agnes-synthesize.ts` — the Agnes-backed synthesis ops: one forced-tool call per ordinal for the chapter summary, and either twelve `emit_section` calls (per-section) or one `assemble_bible` call (monolithic) per bible, each with one self-healing retry and cache-aware keys
 - `lib/extraction-run.ts` — drives extraction sequentially over a book, snapshotting the facts after each ordinal
 - `lib/fact-text.ts` — renders structured facts as keyed fact descriptors
 - `lib/assertion-match.ts` — assertion↔fact matching: exact checks first; judgable fields (relation types, descriptions, topics, event wording) route to the equivalence judge on `must` assertions only — names, holders, statuses, and spellings never depend on a model's opinion
@@ -77,7 +79,7 @@ Fixture-side machinery beside `src/lib/`:
 - `lib/judge.ts` / `lib/stub-judge.ts` / `lib/live-judge.ts` — the judge seam: equivalence-only verdicts per ADR-0005 (two values + fixed rubric in, equivalent-or-not out, never fixture text); a scripted stub keeps runs offline, the Agnes-backed implementation (`agnes-2.5-flash`, forced tool-call verdicts per ADR-0004) shares the identical interface
 - `lib/verdict-cache.ts` / `lib/cached-judge.ts` — all judge calls cached by SHA-256 of their canonical input; cache lives under gitignored `results/cache/`
 
-- `lib/response-cache.ts` — extraction-only raw-response cache (`results/cache/extract-cache.json`): temp-0 extraction requests are input-deterministic, so repeats across runs/processes are free; stored payloads re-enter the same validation boundary on read, and any prompt/tool/sampling change produces new keys. Check and generate calls are deliberately never cached (checks are few; generation prose is sampled — caching it would hollow out what the axis measures)
+- `lib/response-cache.ts` — raw-response caches over gitignored `results/cache/`: `extract-cache.json` for temp-0 extraction requests and `synthesis-cache.json` for synthesis calls (keys include the strategy so per-section and monolithic never collide). Requests are input-deterministic, so repeats across runs/processes are free; stored payloads re-enter the same validation boundary on read, and any prompt/tool/sampling/strategy change produces new keys. Check and generate calls are deliberately never cached (checks are few; generation prose is sampled — caching it would hollow out what the axis measures)
 - `lib/metrics.ts` / `lib/gates.ts` — per-kind precision/recall/F1 arithmetic, mean ± variance aggregation, global precision floor + per-kind recall floors (lenient defaults, configurable)
 - `lib/manifest.ts` — fixture book validation: manifest schema, chapter files present, ordinals contiguous from 1; backs `validate`/`list` and every run's pre-flight
 - `lib/perturbation.ts` / `lib/perturbation-file.ts` — checker fixtures: perturbation (must-flag) and control (must-not-flag) cases in `perturbations/`, cross-checked against the book's assertion ids; an absent directory loads empty-valid
@@ -128,13 +130,17 @@ Each `books` entry can override `axes`, `runs`, `pipeline`, `judge`, and `gates`
 | `--books-root <dir>` | `benchmarks/books` | override the fixture books root; cache paths resolve against it |
 | `--format <text\|json>` | `text` | human text or machine JSON on stdout (JSON mode keeps stdout pure) |
 | `--gates <file>` | lenient | JSON: `{"global_precision_min": 0..1, "recall_min": {"<kind>": 0..1}}`; evaluated on run means |
+| `--synthesis <per-section\|monolithic>` | `per-section` | bible synthesis strategy (extraction axis only): one focused call per model section vs one composed call |
 
 CLI invocation loads `benchmarks/.env` automatically (`AGNES_API_KEY`, `AGNES_BASE_URL`,
 `AGNES_MIN_INTERVAL_MS`).
 
-All three ops are registered twice behind one port: vendor-backed implementations
-(`lib/agnes-client.ts` / `agnes-extract.ts` / `agnes-check.ts` / `agnes-generate.ts`, default
-`--pipeline live`) and the deterministic fakes above (explicit `--pipeline fake`). Live traffic
+All port ops are registered twice behind one interface: vendor-backed implementations
+(`lib/agnes-client.ts` / `agnes-extract.ts` / `agnes-check.ts` / `agnes-generate.ts` /
+`agnes-synthesize.ts`, default `--pipeline live`) and the deterministic fakes above (explicit
+`--pipeline fake`). Per ordinal the extraction axis also drives the synthesis layer
+(`synthesizeChapterSummary` then `synthesizeBible`), stamping the strategy on every event.
+Live traffic
 flows through one shared rate-limited client — fixed-interval spacing defaulting to 3.5 s between
 request starts (~17 RPM of headroom under Agnes's free-tier 20 executable RPM; widen via
 `AGNES_MIN_INTERVAL_MS`) plus exponential backoff on 429/5xx — with retry-safe payloads guarded

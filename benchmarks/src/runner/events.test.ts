@@ -155,16 +155,25 @@ describe("--format events — deterministic mini-book sequence (fake pipeline, s
     );
 
     // Canon accumulation per ordinal is hand-computable from the fake grammar:
-    // ch1 6 entries, ch2 +3, ch3 +2, ch4 +1 (holder/status replace in place).
+    // ch1 7 entries, ch2 +3, ch3 +2, ch4 +1 (holder/status replace in place).
     const completedChapters = events.filter(
       (e): e is Extract<BenchmarkEvent, { type: "chapter.completed" }> =>
         e.type === "chapter.completed",
     );
-    expect(completedChapters.map((e) => e.canonEntries)).toEqual([6, 9, 11, 12]);
+    expect(completedChapters.map((e) => e.canonEntries)).toEqual([7, 10, 12, 13]);
     for (const chapter of completedChapters) {
       expect(chapter.elapsedMs).toBeTypeOf("number");
       expect(chapter.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(typeof chapter.chapterSummary).toBe("string");
+      expect(chapter.synthesis).toBe("per-section");
+      // The bible through each ordinal carries that chapter's summary.
+      expect(chapter.bible.chapterSummaries.at(-1)).toEqual({
+        ordinal: chapter.ordinal,
+        summary: chapter.chapterSummary,
+      });
     }
+    // The ch1 summary renders the newly graded location fact.
+    expect(completedChapters[0]?.chapterSummary).toContain('location named "the northern light"');
     expect(completedChapters[1]?.facts.items).toEqual([{ item: "brass compass", holder: "Mara Vey" }]);
     expect(completedChapters[3]?.facts.items).toEqual([
       { item: "brass compass", holder: "Joren Vey" },
@@ -200,6 +209,16 @@ describe("--format events — deterministic mini-book sequence (fake pipeline, s
     expect(completed.snapshots[0]?.facts.characters).toHaveLength(2);
     expect(completed.snapshots[1]?.facts.threads).toEqual([
       { thread: "the missing ledger", status: "open" },
+    ]);
+
+    // The synthesis layer rides alongside the fact snapshots (issue #14).
+    expect(completed.synthesis).toBe("per-section");
+    expect(completed.bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
+    expect(completed.bible).toEqual(completed.bibleSnapshots.at(-1)?.bible);
+    expect(completed.bible.chapterSummaries).toHaveLength(4);
+    expect(completed.bible.graph.nodes).toEqual([
+      { name: "Mara Vey", importance: 5, role: "protagonist" },
+      { name: "Joren Vey", importance: 4, role: "supporting" },
     ]);
   });
 
@@ -377,6 +396,26 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
     totalChapters: 4,
   };
 
+  const emptyBible = {
+    bookOverview: "",
+    world: [],
+    characterProfiles: [],
+    locationProfiles: [],
+    threadRollups: [],
+    groups: [],
+    itemsOfSignificance: [],
+    lexiconNotes: [],
+    openLoops: [],
+    styleRollup: [],
+    worldTimeline: [],
+    bookTimeline: [],
+    chapterSummaries: [{ ordinal: 1, summary: "Mara keeps the light." }],
+    graph: {
+      nodes: [{ name: "Mara Vey", importance: 1, role: "protagonist" }],
+      edges: [],
+    },
+  };
+
   it("accepts a well-formed run.started", () => {
     expect(parseBenchmarkEvent(validRunStarted)).toEqual(validRunStarted);
   });
@@ -416,12 +455,16 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
         appearances: [],
         relationships: [],
         items: [],
+        locations: [{ name: "the northern light" }],
         threads: [],
         worldRules: [],
         timeline: [],
         lexicon: [],
         style: [],
       },
+      chapterSummary: 'location named "the northern light"',
+      bible: emptyBible,
+      synthesis: "per-section",
     };
     expect(parseBenchmarkEvent(chapterCompleted)?.type).toBe("chapter.completed");
     expect(parseBenchmarkEvent({ ...chapterCompleted, elapsedMs: -1 })).toBeNull();
@@ -430,6 +473,41 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
       parseBenchmarkEvent({
         ...chapterCompleted,
         facts: { ...chapterCompleted.facts, threads: [{ thread: "x", status: "cancelled" }] },
+      }),
+    ).toBeNull();
+    const { locations: _missing, ...factsWithoutLocations } = chapterCompleted.facts;
+    expect(parseBenchmarkEvent({ ...chapterCompleted, facts: factsWithoutLocations })).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterCompleted,
+        facts: { ...chapterCompleted.facts, locations: [{ names: "the northern light" }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterCompleted,
+        facts: { ...chapterCompleted.facts, locations: [{ name: "" }] },
+      }),
+    ).toBeNull();
+    // Synthesis payloads are required and strict.
+    const { chapterSummary: _noSummary, ...withoutSummary } = chapterCompleted;
+    expect(parseBenchmarkEvent(withoutSummary)).toBeNull();
+    expect(parseBenchmarkEvent({ ...chapterCompleted, chapterSummary: 7 })).toBeNull();
+    expect(parseBenchmarkEvent({ ...chapterCompleted, synthesis: "holographic" })).toBeNull();
+    const { bible: _noBible, ...withoutBible } = chapterCompleted;
+    expect(parseBenchmarkEvent(withoutBible)).toBeNull();
+    const { graph: _noGraph, ...bibleWithoutGraph } = emptyBible;
+    expect(parseBenchmarkEvent({ ...chapterCompleted, bible: bibleWithoutGraph })).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterCompleted,
+        bible: { ...emptyBible, chapterSummaries: [{ ordinal: 0, summary: "x" }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterCompleted,
+        bible: { ...emptyBible, graph: { nodes: [{ name: "A", importance: -1, role: "protagonist" }], edges: [] } },
       }),
     ).toBeNull();
   });
@@ -457,6 +535,7 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
         appearances: [],
         relationships: [],
         items: [],
+        locations: [],
         threads: [],
         worldRules: [],
         timeline: [],
@@ -465,6 +544,9 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
       },
       snapshots: [],
       evidence: [],
+      bible: emptyBible,
+      bibleSnapshots: [{ afterOrdinal: 1, bible: emptyBible }],
+      synthesis: "per-section",
     };
     expect(parseBenchmarkEvent(base)?.type).toBe("run.completed");
     expect(parseBenchmarkEvent({ ...base, exitCode: "0" })).toBeNull();
@@ -475,6 +557,10 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
         evidence: [{ runIndex: 1, assertionId: "a", kind: "lexicon", expect: "must", gradedAtOrdinal: 2, verdict: "wrong" }],
       }),
     ).toBeNull();
+    const { bibleSnapshots: _none, ...withoutBibleSnapshots } = base;
+    expect(parseBenchmarkEvent(withoutBibleSnapshots)).toBeNull();
+    expect(parseBenchmarkEvent({ ...base, bibleSnapshots: [{ afterOrdinal: 0, bible: emptyBible }] })).toBeNull();
+    expect(parseBenchmarkEvent({ ...base, synthesis: "monolith" })).toBeNull();
   });
 
   it("accepts a full round-trip of the emitted mini-book stream", async () => {

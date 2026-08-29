@@ -43,6 +43,7 @@ describe("validateAssertionSet", () => {
           type: "daughter",
         }),
         baseEntry("item", { id: "item-compass", item: "the brass compass", holder: "Joren Vey" }),
+        baseEntry("location", { id: "loc-light", name: "the northern light" }),
         baseEntry("thread", {
           id: "thread-ledger",
           thread: "the missing ledger",
@@ -65,7 +66,7 @@ describe("validateAssertionSet", () => {
     if (result.ok) {
       expect(result.set.book).toBe("mini-book");
       expect(result.set.assertions).toHaveLength(ASSERTION_KINDS.length);
-      const thread = result.set.assertions[4];
+      const thread = result.set.assertions.find((a) => a.id === "thread-ledger");
       expect(thread).toMatchObject({ kind: "thread", asOf: 4, status: "resolved" });
     }
   });
@@ -76,6 +77,7 @@ describe("validateAssertionSet", () => {
       "appearance",
       "relationship",
       "item",
+      "location",
       "thread",
       "world_rule",
       "timeline",
@@ -140,13 +142,53 @@ describe("validateAssertionSet", () => {
   });
 
   it("rejects an unknown kind with the accepted list", () => {
-    const raw = { book: "mini-book", assertions: [baseEntry("location", { name: "X" })] };
+    const raw = { book: "mini-book", assertions: [baseEntry("creature", { name: "X" })] };
     const result = validateAssertionSet(raw, CTX);
     expect(codesOf(result)).toEqual(["E_SCHEMA"]);
     const message = issuesOf(result)[0]?.message ?? "";
     expect(message).toContain("assertions[0]");
     expect(message).toContain('"kind" must be one of');
     expect(message).toContain("character");
+  });
+
+  it("accepts a location assertion by exact name for both polarities", () => {
+    const must = validateAssertionSet(
+      {
+        book: "mini-book",
+        assertions: [baseEntry("location", { id: "loc-light", name: "the northern light" })],
+      },
+      CTX,
+    );
+    expect(must.ok).toBe(true);
+    if (must.ok) {
+      expect(must.set.assertions[0]).toMatchObject({
+        kind: "location",
+        name: "the northern light",
+        expect: "must",
+      });
+    }
+
+    const mustNot = validateAssertionSet(
+      {
+        book: "mini-book",
+        assertions: [
+          baseEntry("location", {
+            id: "loc-southern",
+            expect: "must_not",
+            name: "the southern light",
+          }),
+        ],
+      },
+      CTX,
+    );
+    expect(mustNot.ok).toBe(true);
+    if (mustNot.ok) {
+      expect(mustNot.set.assertions[0]).toMatchObject({
+        kind: "location",
+        name: "the southern light",
+        expect: "must_not",
+      });
+    }
   });
 
   it("rejects an unknown expect polarity", () => {
@@ -236,6 +278,7 @@ describe("validateAssertionSet", () => {
       ["appearance", { character: "C", attribute: "a" }, '"contains"'],
       ["relationship", { from: "A" }, '"to"'],
       ["item", { item: "compass" }, '"holder"'],
+      ["location", {}, '"name"'],
       ["thread", { thread: "t" }, '"status"'],
       ["world_rule", {}, '"topic"'],
       ["timeline", {}, '"sequence"'],

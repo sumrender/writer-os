@@ -20,6 +20,7 @@ import {
   JUDGES,
   LOG_LEVELS,
   PIPELINES,
+  SYNTHESIS_STRATEGIES,
   type CliIo,
   type RunCliOverrides,
 } from "./types.js";
@@ -94,6 +95,9 @@ function validateConfig(config: BenchmarkConfig): void {
   }
   if (!(JUDGES as readonly string[]).includes(config.judge)) {
     throw new Error(`config: judge must be one of ${JUDGES.join(", ")}`);
+  }
+  if (!(SYNTHESIS_STRATEGIES as readonly string[]).includes(config.synthesis)) {
+    throw new Error(`config: synthesis must be one of ${SYNTHESIS_STRATEGIES.join(", ")}`);
   }
   if (!(FORMATS as readonly string[]).includes(config.format)) {
     throw new Error(`config: format must be one of ${FORMATS.join(", ")}`);
@@ -179,6 +183,7 @@ function headerLine(config: BenchmarkConfig): string {
     `runs=${config.runs}`,
     `pipeline=${config.pipeline}`,
     `judge=${config.judge}`,
+    `synthesis=${config.synthesis}`,
     `cache=${config.cache.enabled ? "ENABLED" : "DISABLED"}`,
     `format=${config.format}`,
     `log-level=${config.logLevel}`,
@@ -207,6 +212,9 @@ function overridesFor(config: BenchmarkConfig, booksRoot: string): RunCliOverrid
     ...(config.cache.judgeCachePath !== undefined ? { judgeCachePath: config.cache.judgeCachePath } : {}),
     ...(config.cache.extractCachePath !== undefined
       ? { extractCachePath: config.cache.extractCachePath }
+      : {}),
+    ...(config.cache.synthesisCachePath !== undefined
+      ? { synthesisCachePath: config.cache.synthesisCachePath }
       : {}),
   };
 }
@@ -279,6 +287,9 @@ export async function runBenchmark(
           config.logLevel,
           "--cache",
           String(config.cache.enabled),
+          // The synthesis strategy is an extraction-axis flag; other axes
+          // must not see it (their command surfaces never parse it).
+          ...(axis === "extraction" ? ["--synthesis", config.synthesis] : []),
           ...(gatesPath !== undefined ? ["--gates", gatesPath] : []),
         ];
 

@@ -24,6 +24,7 @@ describe("createAgnesGenerate", () => {
         assembledContext: 'canon fact line\nanother fact line',
         factsAsOf: {
           characters: [],
+          locations: [],
           appearances: [],
           relationships: [],
           items: [],
@@ -62,6 +63,7 @@ describe("createAgnesGenerate", () => {
       assembledContext: "(facts)",
       factsAsOf: {
         characters: [],
+        locations: [],
         appearances: [],
         relationships: [],
         items: [],

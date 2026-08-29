@@ -8,6 +8,7 @@ export const USAGE = `usage:
   bench validate --book <id> [--books-root <dir>]
   bench run --book <id> --axis <extraction|checker|generation>
             [--runs <n>] [--pipeline <live|fake>] [--judge <stub|live>]
+            [--synthesis <per-section|monolithic>]
             [--cache <true|false>] [--log-level <off|info|debug>]
             [--format <text|json|events>] [--gates <file>] [--books-root <dir>]
   bench list [--books-root <dir>]
@@ -17,12 +18,17 @@ run defaults: ${RUNS_PER_BOOK} runs · live pipelines (AGNES_API_KEY required;
 pass --pipeline fake for a fully offline run) · stub judge · text report · lenient gates · cache on · info logs
 The judge and pipelines share one rate-limited Agnes client (free tier executes
 ~20 RPM; AGNES_MIN_INTERVAL_MS widens the spacing). --cache true (default)
-persists judge verdicts and extraction responses by input hash under
-results/cache/; --cache false forces every call to reach the API fresh.
+persists judge verdicts, extraction responses, and synthesis responses by
+input hash under results/cache/; --cache false forces every call to reach the
+API fresh. --synthesis selects the bible synthesis strategy (extraction axis):
+per-section (default) makes one focused call per bible section, monolithic
+composes the same section blocks into one call; the strategy rides in the
+cache keys so the two paths never collide.
 --log-level controls progress lines on stderr (stdout stays pure for --format json):
 info = phase + per-chapter + per-assertion progress; debug = + every API call,
 cache hit/miss, and retry. Both off by default at --log-level off.
 --format events (extraction axis only) streams one JSON event per line on
 stdout — run.started, chapter.started/chapter.completed (with the Story Facts
-snapshot per chapter), run.completed (report + final facts + snapshots), or
-run.failed — while all human logs stay on stderr.`;
+snapshot, the chapter summary, and the Story Bible per chapter),
+run.completed (report + final facts + snapshots + final bible + per-ordinal
+bible snapshots), or run.failed — while all human logs stay on stderr.`;

@@ -9,6 +9,7 @@ export const ENTITY_KINDS = [
   "appearance",
   "relationship",
   "item",
+  "location",
   "thread",
   "world_rule",
   "timeline",
@@ -43,6 +44,10 @@ export interface ItemEntry {
   readonly holder: string;
 }
 
+export interface LocationEntry {
+  readonly name: string;
+}
+
 export interface ThreadEntry {
   readonly thread: string;
   readonly status: ThreadStatus;
@@ -67,6 +72,7 @@ export interface StoryFacts {
   readonly appearances: readonly AppearanceEntry[];
   readonly relationships: readonly RelationshipEntry[];
   readonly items: readonly ItemEntry[];
+  readonly locations: readonly LocationEntry[];
   readonly threads: readonly ThreadEntry[];
   readonly worldRules: readonly WorldRuleEntry[];
   /** In-world events in established order (ADR-0003: never a versioning key). */
@@ -81,6 +87,7 @@ export function emptyStoryFacts(): StoryFacts {
     appearances: [],
     relationships: [],
     items: [],
+    locations: [],
     threads: [],
     worldRules: [],
     timeline: [],
@@ -96,6 +103,7 @@ export function factCount(facts: StoryFacts): number {
     facts.appearances.length +
     facts.relationships.length +
     facts.items.length +
+    facts.locations.length +
     facts.threads.length +
     facts.worldRules.length +
     facts.timeline.length +

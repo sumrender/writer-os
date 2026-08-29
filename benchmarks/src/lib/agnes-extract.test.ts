@@ -190,7 +190,7 @@ describe("parseExtractedFacts — trust-boundary validation", () => {
 
   it("reports the raw fact on every rejection, including invalid kinds", () => {
     const result = parseExtractedFactsDetailed(
-      JSON.stringify({ facts: [{ kind: "location", place: "the harbor" }] }),
+      JSON.stringify({ facts: [{ kind: "creature", place: "the harbor" }] }),
     );
     expect(result.facts).toEqual([]);
     expect(result.skipped).toHaveLength(1);
@@ -206,9 +206,18 @@ describe("parseExtractedFacts — trust-boundary validation", () => {
         JSON.stringify({ facts: [{ item: "brass compass", holder: "Mara Vey" }] }),
       ),
     ).toEqual([{ kind: "item", item: "brass compass", holder: "Mara Vey" }]);
-    expect(parseExtractedFacts(JSON.stringify({ facts: [{ name: "Mara Vey" }] }))).toEqual([
-      { kind: "character", name: "Mara Vey" },
-    ]);
+  });
+
+  it("rejects a bare {name} payload as ambiguous between character and location", () => {
+    // location joined the kind list with the same single-field shape as
+    // character; guessing between them would silently misfile facts, so a
+    // kind-less {name} stays a precise hard error (never silently guessed).
+    const result = parseExtractedFactsDetailed(
+      JSON.stringify({ facts: [{ name: "Mara Vey" }] }),
+    );
+    expect(result.facts).toEqual([]);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]?.reason).toMatch(/resolve ambiguously \(character vs location\)/u);
   });
 
   it("still rejects a missing kind whose fields match no kind at all", () => {

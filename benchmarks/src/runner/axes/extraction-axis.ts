@@ -1,7 +1,14 @@
-import { emptyStoryFacts, factCount, ENTITY_KINDS, type EntityKind } from "../../lib/story-facts.js";
+import { emptyStoryFacts, factCount, ENTITY_KINDS, type EntityKind, type StoryFacts } from "../../lib/story-facts.js";
 import type { AssertionSet } from "../../lib/assertions.js";
 import type { ExtractableChapter } from "../../lib/manifest.js";
-import type { Extract } from "../../lib/pipeline.js";
+import type {
+  Extract,
+  SynthesisStrategy,
+  SynthesizeBible,
+  SynthesizeChapterSummary,
+} from "../../lib/pipeline.js";
+import type { BibleSnapshot } from "../../lib/story-bible.js";
+import { emptyStoryBible } from "../../lib/story-bible.js";
 import type { Judge } from "../../lib/judge.js";
 import { runExtraction, type ExtractionSnapshot } from "../../lib/extraction-run.js";
 import { gradeAssertionSet, type GradedAssertion } from "../../lib/grader.js";
@@ -26,6 +33,9 @@ import type { EventSink, ExtractionEvidenceLine } from "../events.js";
  * judge-mediated only where values differ superficially, plus an open-world
  * sweep per run. Per-kind precision/recall/F1 and the estimated fabrication
  * rate aggregate to mean ± variance; gates evaluate against the means.
+ * Per ordinal the axis also drives the synthesis layer (issue #14): a chapter
+ * summary, then the Story Bible through that ordinal, both attached to the
+ * `chapter.completed` event with the strategy stamped on.
  */
 
 export interface ExtractionAxisInput {
@@ -34,6 +44,12 @@ export interface ExtractionAxisInput {
   readonly chapters: readonly ExtractableChapter[];
   readonly assertions: AssertionSet;
   readonly extract: Extract;
+  /** Chapter-summary synthesis, invoked once per ordinal. */
+  readonly synthesizeChapterSummary: SynthesizeChapterSummary;
+  /** Bible synthesis through each ordinal, invoked once per ordinal. */
+  readonly synthesizeBible: SynthesizeBible;
+  /** The configured bible synthesis strategy, stamped on events. */
+  readonly synthesis: SynthesisStrategy;
   readonly judge: Judge;
   readonly gates: GateConfig;
   readonly runs?: number;
@@ -91,19 +107,51 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
     input.chapters.map((chapter) => ({ ordinal: chapter.ordinal, text: chapter.text })),
   );
 
+  /** Chapter text per ordinal — the summary's source (1-based ordinals). */
+  const chapterTexts = new Map<number, string>(
+    [...input.chapters].sort((a, b) => a.ordinal - b.ordinal).map((chapter) => [chapter.ordinal, chapter.text]),
+  );
+
   const kindStats = new Map<EntityKind, { metrics: KindMetrics[]; counts: KindCounts[] }>();
   const precisions: number[] = [];
   const sweptPerRun: number[] = [];
   const unsupportedPerRun: number[] = [];
   const evidence: ExtractionEvidenceLine[] = [];
   let finalSnapshots: readonly ExtractionSnapshot[] = [];
+  let finalBibleSnapshots: readonly BibleSnapshot[] = [];
 
   for (let run = 0; run < runs; run++) {
     const runIndex = run + 1;
     log.info(`run ${run + 1}/${runs}: extracting ${input.chapters.length} chapter(s)`);
+    const summaries: { ordinal: number; summary: string }[] = [];
+    const bibleSnapshots: BibleSnapshot[] = [];
+    // The summary of chapter N sees canon BEFORE N: the facts the previous
+    // hook invocation observed, or empty canon for ordinal 1.
+    let factsBefore: StoryFacts = emptyStoryFacts();
     const snapshots = await runExtraction(input.chapters, input.extract, log, {
       onChapterStart: (ordinal) => emit?.({ type: "chapter.started", ordinal, runIndex }),
-      onChapterComplete: ({ ordinal, elapsedMs, facts }) =>
+      onChapterComplete: async ({ ordinal, elapsedMs, facts }) => {
+        const chapterText = chapterTexts.get(ordinal);
+        if (chapterText === undefined) {
+          throw new Error(`extraction axis: no chapter text for ordinal ${ordinal}`);
+        }
+        const chapterSummary = await input.synthesizeChapterSummary({
+          ordinal,
+          text: chapterText,
+          factsSoFar: factsBefore,
+        });
+        summaries.push({ ordinal: chapterSummary.ordinal, summary: chapterSummary.summary });
+        const bible = await input.synthesizeBible({
+          // The map was built in manuscript order, so a filter yields the
+          // 1..ordinal prefix without re-sorting.
+          chapters: [...chapterTexts.entries()]
+            .filter(([chapterOrdinal]) => chapterOrdinal <= ordinal)
+            .map(([, text]) => text),
+          facts,
+          summaries: [...summaries],
+        });
+        bibleSnapshots.push({ afterOrdinal: ordinal, bible });
+        factsBefore = facts;
         emit?.({
           type: "chapter.completed",
           ordinal,
@@ -111,9 +159,14 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
           elapsedMs,
           canonEntries: factCount(facts),
           facts,
-        }),
+          chapterSummary: chapterSummary.summary,
+          bible,
+          synthesis: input.synthesis,
+        });
+      },
     });
     finalSnapshots = snapshots;
+    finalBibleSnapshots = bibleSnapshots;
     log.info(`run ${run + 1}/${runs}: grading ${input.assertions.assertions.length} assertion(s)`);
     const gradedExtraction = await gradeAssertionSet(
       input.assertions,
@@ -214,6 +267,9 @@ export async function runExtractionAxis(input: ExtractionAxisInput): Promise<Ext
     facts: finalSnapshots.at(-1)?.facts ?? emptyStoryFacts(),
     snapshots: finalSnapshots,
     evidence,
+    bible: finalBibleSnapshots.at(-1)?.bible ?? emptyStoryBible(),
+    bibleSnapshots: finalBibleSnapshots,
+    synthesis: input.synthesis,
   });
 
   return report;

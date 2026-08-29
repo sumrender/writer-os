@@ -3,14 +3,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAssertionSet } from "../../lib/assertion-file.js";
 import { validateBook } from "../../lib/manifest.js";
-import { fakeExtract } from "../../lib/fakes.js";
+import { fakeExtract, fakeSynthesizeBible, fakeSynthesizeChapterSummary } from "../../lib/fakes.js";
 import type { Extract } from "../../lib/pipeline.js";
 import { createStubJudge } from "../../lib/stub-judge.js";
 import { CachingJudge } from "../../lib/cached-judge.js";
 import { MemoryVerdictCache } from "../../lib/verdict-cache.js";
 import { DEFAULT_GATES } from "../../lib/gates.js";
-import { runExtractionAxis } from "./extraction-axis.js";
+import { runExtractionAxis, type ExtractionAxisInput, type ExtractionAxisReport } from "./extraction-axis.js";
 import { formatJsonReport, formatTextReport } from "../report.js";
+import type { BenchmarkEvent, ChapterCompletedEvent } from "../events.js";
 
 const booksRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "books");
 
@@ -22,22 +23,38 @@ async function loadMiniBook() {
   return { chapters: book.chapters, set: assertions.set };
 }
 
+/**
+ * The axis input's fixed shape for a mini-book run: offline fakes for
+ * synthesis, with per-field overrides for everything a test varies.
+ */
+async function runAxis(
+  overrides: Partial<ExtractionAxisInput> = {},
+): Promise<{ report: ExtractionAxisReport; events: BenchmarkEvent[] }> {
+  const { chapters, set } = await loadMiniBook();
+  const events: BenchmarkEvent[] = [];
+  const report = await runExtractionAxis({
+    bookId: "mini-book",
+    chapters,
+    assertions: set,
+    extract: fakeExtract,
+    synthesizeChapterSummary: fakeSynthesizeChapterSummary,
+    synthesizeBible: fakeSynthesizeBible,
+    synthesis: "per-section",
+    judge: createStubJudge({ defaultSupported: true }),
+    gates: DEFAULT_GATES,
+    onEvent: (event) => events.push(event),
+    ...overrides,
+  });
+  return { report, events };
+}
+
 describe("runExtractionAxis — known-by-construction scores", () => {
   it("scores the mini-book perfectly across three offline runs", async () => {
-    const { chapters, set } = await loadMiniBook();
-
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
-      extract: fakeExtract,
-      judge: createStubJudge({ defaultSupported: true }),
-      gates: DEFAULT_GATES,
-    });
+    const { report } = await runAxis();
 
     expect(report.passed).toBe(true);
     expect(report.runs).toBe(3);
-    expect(report.kinds).toHaveLength(9);
+    expect(report.kinds).toHaveLength(10);
     for (const entry of report.kinds) {
       const { precision, recall, f1 } = entry.report;
       expect(precision.mean, `${entry.kind} precision`).toBe(1);
@@ -55,16 +72,7 @@ describe("runExtractionAxis — known-by-construction scores", () => {
   });
 
   it("counts the unasserted father relationship as the only swept fact", async () => {
-    const { chapters, set } = await loadMiniBook();
-
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
-      extract: fakeExtract,
-      judge: createStubJudge({ defaultSupported: true }),
-      gates: DEFAULT_GATES,
-    });
+    const { report } = await runAxis();
 
     expect(report.sweep.unsupported.mean).toBe(0);
     expect(report.sweep.estimatedFabricationRate.variance).toBe(0);
@@ -73,7 +81,6 @@ describe("runExtractionAxis — known-by-construction scores", () => {
 
 describe("runExtractionAxis — judge-routed paraphrases with caching", () => {
   it("resolves a paraphrased relation type through the cached judge exactly once", async () => {
-    const { chapters, set } = await loadMiniBook();
     const paraphrasingExtract: Extract = async (text, ordinal, factsSoFar) => {
       const state = await fakeExtract(text, ordinal, factsSoFar);
       return {
@@ -88,14 +95,7 @@ describe("runExtractionAxis — judge-routed paraphrases with caching", () => {
     });
     const judge = new CachingJudge(stub, new MemoryVerdictCache());
 
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
-      extract: paraphrasingExtract,
-      judge,
-      gates: DEFAULT_GATES,
-    });
+    const { report } = await runAxis({ extract: paraphrasingExtract, judge });
 
     const relationship = report.kinds.find((k) => k.kind === "relationship");
     expect(relationship?.report.f1.mean).toBe(1);
@@ -115,12 +115,7 @@ describe("runExtractionAxis — omissions, fabrications, gates", () => {
     );
 
   it("fails recall-driven gates when a required term is omitted every run", async () => {
-    const { chapters, set } = await loadMiniBook();
-
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
+    const { report } = await runAxis({
       extract: withoutLexiconCh2,
       judge: createStubJudge(),
       gates: { ...DEFAULT_GATES, recallMin: { lexicon: 0.9 } },
@@ -134,7 +129,6 @@ describe("runExtractionAxis — omissions, fabrications, gates", () => {
   });
 
   it("reports judge-estimated fabrications separately without touching exact scores", async () => {
-    const { chapters, set } = await loadMiniBook();
     const FABRICATED_RULE = "vessels of iron ships";
     const fabricatingExtract: Extract = async (text, ordinal, facts) => {
       const state = await fakeExtract(text, ordinal, facts);
@@ -143,10 +137,7 @@ describe("runExtractionAxis — omissions, fabrications, gates", () => {
         : { ...state, worldRules: [...state.worldRules, { topic: FABRICATED_RULE }] };
     };
 
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
+    const { report } = await runAxis({
       extract: fabricatingExtract,
       judge: createStubJudge({
         support: [{ factIncludes: "iron", supported: false }],
@@ -165,46 +156,61 @@ describe("runExtractionAxis — omissions, fabrications, gates", () => {
 
 describe("runExtractionAxis — protocol guards", () => {
   it("rejects a non-positive run count up front", async () => {
-    const { chapters, set } = await loadMiniBook();
-    await expect(
-      runExtractionAxis({
-        bookId: "mini-book",
-        chapters,
-        assertions: set,
-        extract: fakeExtract,
-        judge: createStubJudge(),
-        gates: DEFAULT_GATES,
-        runs: 0,
-      }),
-    ).rejects.toThrow(/at least one run/i);
+    await expect(runAxis({ judge: createStubJudge(), runs: 0 })).rejects.toThrow(
+      /at least one run/i,
+    );
   });
 
   it("honors a custom run count", async () => {
-    const { chapters, set } = await loadMiniBook();
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
-      extract: fakeExtract,
+    const { report } = await runAxis({
       judge: createStubJudge(),
-      gates: DEFAULT_GATES,
       runs: 1,
     });
     expect(report.runs).toBe(1);
   });
 });
 
+describe("runExtractionAxis — synthesis per ordinal (issue #14)", () => {
+  it("emits a chapter summary and a growing bible per ordinal with the strategy stamped", async () => {
+    const { report, events } = await runAxis({ runs: 1 });
+
+    const completed = events.filter(
+      (e): e is ChapterCompletedEvent => e.type === "chapter.completed",
+    );
+    expect(completed.map((e) => e.ordinal)).toEqual([1, 2, 3, 4]);
+    for (const event of completed) {
+      expect(typeof event.chapterSummary).toBe("string");
+      expect(event.bible.chapterSummaries.map((s) => s.ordinal)).toEqual(
+        Array.from({ length: event.ordinal }, (_, i) => i + 1),
+      );
+      expect(event.synthesis).toBe("per-section");
+    }
+    // The final chapter's bible carries every summary and the derived graph.
+    const finalBible = completed.at(-1)?.bible;
+    expect(finalBible?.chapterSummaries).toHaveLength(4);
+    expect(finalBible?.graph.nodes).toEqual([
+      { name: "Mara Vey", importance: 5, role: "protagonist" },
+      { name: "Joren Vey", importance: 4, role: "supporting" },
+    ]);
+    expect(finalBible?.graph.edges).toEqual([
+      { from: "Mara Vey", to: "Joren Vey", relation: "daughter" },
+      { from: "Joren Vey", to: "Mara Vey", relation: "father" },
+    ]);
+
+    const finished = events.find((e) => e.type === "run.completed");
+    expect(finished?.type).toBe("run.completed");
+    if (finished?.type === "run.completed") {
+      expect(finished.synthesis).toBe("per-section");
+      expect(finished.bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
+      expect(finished.bible).toEqual(finalBible);
+    }
+    expect(report.passed).toBe(true);
+  });
+});
+
 describe("report formatting", () => {
   it("renders per-kind rows, sweep estimate, and gate status as text", async () => {
-    const { chapters, set } = await loadMiniBook();
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
-      extract: fakeExtract,
-      judge: createStubJudge({ defaultSupported: true }),
-      gates: DEFAULT_GATES,
-    });
+    const { report } = await runAxis();
 
     const text = formatTextReport(report).join("\n");
 
@@ -217,7 +223,6 @@ describe("report formatting", () => {
   });
 
   it("lists failing gates explicitly when the run fails", async () => {
-    const { chapters, set } = await loadMiniBook();
     const withoutStyle: Extract = async (text, ordinal, facts) =>
       fakeExtract(
         text
@@ -227,10 +232,7 @@ describe("report formatting", () => {
         ordinal,
         facts,
       );
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
+    const { report } = await runAxis({
       extract: withoutStyle,
       judge: createStubJudge(),
       gates: { ...DEFAULT_GATES, recallMin: { style: 1.0 } },
@@ -245,21 +247,13 @@ describe("report formatting", () => {
   });
 
   it("serializes the structured report as JSON", async () => {
-    const { chapters, set } = await loadMiniBook();
-    const report = await runExtractionAxis({
-      bookId: "mini-book",
-      chapters,
-      assertions: set,
-      extract: fakeExtract,
-      judge: createStubJudge({ defaultSupported: true }),
-      gates: DEFAULT_GATES,
-    });
+    const { report } = await runAxis();
 
     const parsed = JSON.parse(formatJsonReport(report)) as typeof report;
 
     expect(parsed.book).toBe("mini-book");
     expect(parsed.axis).toBe("extraction");
-    expect(parsed.kinds).toHaveLength(9);
+    expect(parsed.kinds).toHaveLength(10);
     expect(parsed.passed).toBe(true);
     expect(parsed.sweep.estimatedFabricationRate.mean).toBe(0);
   });

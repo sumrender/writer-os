@@ -1,5 +1,5 @@
 import type { GateConfig } from "../lib/gates.js";
-import type { Axis, JudgeKind, PipelineKind } from "./types.js";
+import type { Axis, JudgeKind, PipelineKind, SynthesisStrategy } from "./types.js";
 
 /**
  * The config-driven chain's declarative layer: what to run, not how. Edit
@@ -42,6 +42,14 @@ export interface BenchmarkConfig {
   /** "stub" = offline scripted judge; "live" = Agnes-backed equivalence judge (ADR-0005). */
   readonly judge: JudgeKind;
 
+  /**
+   * Bible synthesis strategy (issue #14): "per-section" makes one focused
+   * call per model section (default, for synthesis quality); "monolithic"
+   * composes the same section blocks into one call. Rides in the synthesis
+   * cache keys so the two paths never collide.
+   */
+  readonly synthesis: SynthesisStrategy;
+
   /** AI client settings. All optional — fall back to benchmarks/.env / exported environment. */
   readonly agnes: {
     /** Overrides AGNES_API_KEY when set. */
@@ -52,7 +60,7 @@ export interface BenchmarkConfig {
     readonly minIntervalMs?: number;
   };
 
-  /** Cache settings for judge verdicts and extraction responses. */
+  /** Cache settings for judge verdicts, extraction responses, and synthesis responses. */
   readonly cache: {
     /** Default true. False forces every model call to reach the API fresh. */
     readonly enabled: boolean;
@@ -60,6 +68,8 @@ export interface BenchmarkConfig {
     readonly judgeCachePath?: string;
     /** Default results/cache/extract-cache.json (resolved against the books root). */
     readonly extractCachePath?: string;
+    /** Default results/cache/synthesis-cache.json (resolved against the books root). */
+    readonly synthesisCachePath?: string;
   };
 
   /** Extraction gate floors. Omit for the lenient defaults (global precision ≥ 0.5). */
@@ -111,6 +121,10 @@ export const DEFAULT_BENCHMARK_CONFIG: BenchmarkConfig = {
   // equivalence judge (cached by input hash).
   judge: "live",
 
+  // Bible synthesis: one focused call per model section by default;
+  // "monolithic" composes the same section blocks into a single call.
+  synthesis: "per-section",
+
   // Explicit client overrides — usually leave empty and use benchmarks/.env.
   agnes: {
     // apiKey: "...",
@@ -118,11 +132,12 @@ export const DEFAULT_BENCHMARK_CONFIG: BenchmarkConfig = {
     // minIntervalMs: 3500,
   },
 
-  // Judge verdicts + extraction responses persist by input hash when enabled.
+  // Judge verdicts + extraction + synthesis responses persist by input hash when enabled.
   cache: {
     enabled: true,
     // judgeCachePath: "…/judge-cache.json",
     // extractCachePath: "…/extract-cache.json",
+    // synthesisCachePath: "…/synthesis-cache.json",
   },
 
   // Extraction gate floors. Either an inline object

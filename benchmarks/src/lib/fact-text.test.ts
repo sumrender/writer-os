@@ -10,6 +10,7 @@ describe("storyFacts", () => {
       appearances: [{ character: "Mara Vey", attribute: "her coat", contains: "salt-white wool" }],
       relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
       items: [{ item: "brass compass", holder: "Joren Vey" }],
+      locations: [{ name: "the northern light" }],
       threads: [{ thread: "the missing ledger", status: "resolved" as const }],
       worldRules: [{ topic: "the northern light burns without oil" }],
       timeline: ["the ledger burned"],
@@ -26,6 +27,7 @@ describe("storyFacts", () => {
     expect(byText.relationship).toContain('"daughter"');
     expect(byText.item).toContain("brass compass");
     expect(byText.item).toContain("Joren Vey");
+    expect(byText.location).toBe('location named "the northern light"');
     expect(byText.thread).toContain("the missing ledger");
     expect(byText.world_rule).toContain("northern light");
     expect(byText.timeline).toContain("the ledger burned");

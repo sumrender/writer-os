@@ -37,6 +37,17 @@ describe("applyFact — the merge algebra every extractor shares", () => {
     ]);
   });
 
+  it("appends locations only when the name is genuinely new", () => {
+    let state = emptyStoryFacts();
+    state = applyFact(state, { kind: "location", name: "the northern light" });
+    state = applyFact(state, { kind: "location", name: "the northern light" });
+    state = applyFact(state, { kind: "location", name: "Vess harbor" });
+    expect(state.locations).toEqual([
+      { name: "the northern light" },
+      { name: "Vess harbor" },
+    ]);
+  });
+
   it("appends timeline events in read order and appends only genuinely new facts elsewhere", () => {
     let state = emptyStoryFacts();
     state = applyFact(state, { kind: "timeline", event: "the compass cracked" });

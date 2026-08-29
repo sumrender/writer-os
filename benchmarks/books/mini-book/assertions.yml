@@ -63,6 +63,21 @@ assertions:
     evidence: [2]
     note: Bellin never holds the compass anywhere in the book.
 
+  # --- location ---
+  - id: loc-light
+    kind: location
+    expect: must
+    name: the northern light
+    evidence: [1]
+
+  # negative probe: guards a plausible directional confusion
+  - id: loc-southern
+    kind: location
+    expect: must_not
+    name: the southern light
+    evidence: [1]
+    note: ch1 establishes the northern light as the setting; a southern light would be fabrication.
+
   # --- thread ---
   - id: thread-ledger-resolved-asof-4
     kind: thread

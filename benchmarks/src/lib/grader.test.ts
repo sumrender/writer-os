@@ -61,6 +61,7 @@ describe("gradeAssertionSet — deterministic path (no LLM)", () => {
       "appearance",
       "relationship",
       "item",
+      "location",
       "thread",
       "world_rule",
       "timeline",
@@ -77,7 +78,7 @@ describe("gradeAssertionSet — deterministic path (no LLM)", () => {
 
     const graded = await gradeAssertionSet(set, snapshots, createStubJudge());
 
-    expect(graded.claimedKeys.size).toBe(11);
+    expect(graded.claimedKeys.size).toBe(12);
     const claimedRelationships = graded.finalFacts.relationships
       .map((r) => entryKey("relationship", r))
       .filter((key) => graded.claimedKeys.has(key));
@@ -91,7 +92,7 @@ describe("gradeAssertionSet — deterministic path (no LLM)", () => {
 
     const graded = await gradeAssertionSet(set, snapshots, createStubJudge());
 
-    expect(graded.graded.filter((g) => g.verdict === "omission")).toHaveLength(10);
+    expect(graded.graded.filter((g) => g.verdict === "omission")).toHaveLength(11);
   });
 });
 

@@ -33,10 +33,10 @@ const EXTRACT_SYSTEM = [
   "Merge semantics you must respect: character names dedupe automatically;",
   "an item's holder, a thread's status, and style field/value REPLACE their prior canon values",
   "when changed, so re-emit them on change; timeline events append in read order;",
-  "appearances, relationships, world rules, and lexicon terms append when genuinely new.",
-  "The nine kinds carry exact fields:",
+  "locations, appearances, relationships, world rules, and lexicon terms append when genuinely new.",
+  "The ten kinds carry exact fields:",
   "character{name}; appearance{character,attribute,contains}; relationship{from,to,relationType};",
-  "item{item,holder}; thread{thread,status: open|resolved|dormant}; world_rule{topic};",
+  "item{item,holder}; location{name}; thread{thread,status: open|resolved|dormant}; world_rule{topic};",
   "timeline{event}; lexicon{term,lockedSpelling}; style{field,value}.",
   "A fact object carries EXACTLY its kind's fields and no others.",
   "Emit an empty facts array when the chapter establishes nothing.",
@@ -171,6 +171,7 @@ const FIELDS_BY_KIND: Readonly<Record<EntityKind, readonly string[]>> = {
   appearance: ["character", "attribute", "contains"],
   relationship: ["from", "to", "relationType"],
   item: ["item", "holder"],
+  location: ["name"],
   thread: ["thread", "status"],
   world_rule: ["topic"],
   timeline: ["event"],
@@ -178,10 +179,10 @@ const FIELDS_BY_KIND: Readonly<Record<EntityKind, readonly string[]>> = {
   style: ["field", "value"],
 };
 
-/** Every field any fact kind may carry (the union of the nine kinds' shapes). */
+/** Every field any fact kind may carry (the union of the ten kinds' shapes). */
 const FACT_FIELD_NAMES = new Set(Object.values(FIELDS_BY_KIND).flat());
 
-/** The nine kind names — when one of these appears as a stray sibling key
+/** The ten kind names — when one of these appears as a stray sibling key
  * (e.g. `{kind: "appearance", …, appearance: {noise}}`) it is the kind's
  * own wrapper sub-object leaked as a top-level field, not a real fact field. */
 const KIND_NAMES = new Set<string>(ENTITY_KINDS);
@@ -355,6 +356,10 @@ function validateFact(rawInput: unknown, index: number): readonly ExtractedFact[
         },
       ];
     }
+    case "location": {
+      rejectExtraFields(raw, FIELDS_BY_KIND[kind], index);
+      return [{ kind, name: stringField(raw, "name", index) }];
+    }
     case "thread": {
       rejectExtraFields(raw, FIELDS_BY_KIND[kind], index);
       const status = raw["status"];
@@ -402,13 +407,15 @@ function validateFact(rawInput: unknown, index: number): readonly ExtractedFact[
 }
 
 /**
- * Canonicalizes missing-`kind` vendor noise against the nine disjoint kind
+ * Canonicalizes missing-`kind` vendor noise against the ten disjoint kind
  * shapes. Exact-match preferred: remaining keys equal exactly one kind's
- * field set. Subset fallback: every observed field name is globally unique
- * to one kind, so a non-empty subset can resolve unambiguously too (fields
- * the vendor omitted normalize to "", like explicit nulls — losing only what
- * the model never provided). Zero or multiple candidates stay a precise hard
- * error so malformed vendor output is never silently guessed.
+ * field set. Subset fallback: with one exception (`name` is both the
+ * character's and the location's only field, so a bare `{name}` payload is
+ * genuinely ambiguous and hard-fails) every observed field name is globally
+ * unique to one kind, so a non-empty subset can resolve unambiguously too
+ * (fields the vendor omitted normalize to "", like explicit nulls — losing
+ * only what the model never provided). Zero or multiple candidates stay a
+ * precise hard error so malformed vendor output is never silently guessed.
  */
 function inferMissingKind(raw: Record<string, unknown>, index: number): EntityKind {
   const present = Object.keys(raw);
@@ -681,10 +688,10 @@ export function createAgnesExtract(
     };
     const RETRY_INSTRUCTIONS = [
       "Re-emit complete corrected arguments. EVERY fact must carry \"kind\" set to",
-      "one of character, appearance, relationship, item, thread, world_rule, timeline, lexicon, style,",
+      "one of character, appearance, relationship, item, location, thread, world_rule, timeline, lexicon, style,",
       "with exactly that kind's fields and no others:",
       "character{name}; appearance{character,attribute,contains}; relationship{from,to,relationType};",
-      "item{item,holder}; thread{thread,status}; world_rule{topic}; timeline{event}; lexicon{term,lockedSpelling}; style{field,value}.",
+      "item{item,holder}; location{name}; thread{thread,status}; world_rule{topic}; timeline{event}; lexicon{term,lockedSpelling}; style{field,value}.",
     ];
     let result: ParseResult | undefined;
     let problem = "";

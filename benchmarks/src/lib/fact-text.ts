@@ -41,6 +41,11 @@ export function storyFacts(facts: StoryFacts): readonly Fact[] {
       key: entryKey("item", entry),
       text: `item "${entry.item}" is held by "${entry.holder}"`,
     })),
+    ...facts.locations.map((entry): Fact => ({
+      entityKind: "location",
+      key: entryKey("location", entry),
+      text: `location named "${entry.name}"`,
+    })),
     ...facts.threads.map((entry): Fact => ({
       entityKind: "thread",
       key: entryKey("thread", entry),

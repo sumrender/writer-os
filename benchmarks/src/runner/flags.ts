@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_GATES, parseGateConfig, type GateConfig } from "../lib/gates.js";
 import { RUNS_PER_BOOK } from "../lib/metrics.js";
+import { SYNTHESIS_STRATEGIES, type SynthesisStrategy } from "../lib/pipeline.js";
 import { levelFilter, stderrLogger, type Logger, type LogLevel } from "../lib/logger.js";
 import { FORMATS, LOG_LEVELS, type CliIo, type Format, type RunCliOverrides } from "./types.js";
 
@@ -23,6 +24,7 @@ export interface Options {
   pipeline?: string;
   cache?: string;
   logLevel?: string;
+  synthesis?: string;
 }
 
 /** Fixture books root `--books-root` resolves against; cwd never matters. */
@@ -46,6 +48,7 @@ export function parseOptions(tokens: string[]): Options {
     "--pipeline": "pipeline",
     "--cache": "cache",
     "--log-level": "logLevel",
+    "--synthesis": "synthesis",
   };
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -75,6 +78,21 @@ export function cacheEnabledOf(options: Options, io: CliIo): boolean | null {
   if (raw === "true") return true;
   if (raw === "false") return false;
   io.stderr(`--cache must be one of true, false (got: ${raw})`);
+  return null;
+}
+
+/**
+ * Parses --synthesis (default "per-section"); anything else is a usage
+ * error. The strategy selects how the bible synthesis composes its calls
+ * (issue #14) and rides in the synthesis cache keys.
+ */
+export function synthesisStrategyOf(options: Options, io: CliIo): SynthesisStrategy | null {
+  const raw = options.synthesis;
+  if (raw === undefined) return "per-section";
+  if ((SYNTHESIS_STRATEGIES as readonly string[]).includes(raw)) {
+    return raw as SynthesisStrategy;
+  }
+  io.stderr(`--synthesis must be one of ${SYNTHESIS_STRATEGIES.join(", ")} (got: ${raw})`);
   return null;
 }
 

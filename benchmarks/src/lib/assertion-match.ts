@@ -73,6 +73,10 @@ export async function findMatch(
       if (!entry || entry.holder !== assertion.holder) return undefined;
       return exactMatch("item", entry);
     }
+    case "location": {
+      const entry = state.locations.find((l) => l.name === assertion.name);
+      return entry ? exactMatch("location", entry) : undefined;
+    }
     case "thread": {
       const entry = state.threads.find((t) => t.thread === assertion.thread);
       if (!entry || entry.status !== assertion.status) return undefined;
