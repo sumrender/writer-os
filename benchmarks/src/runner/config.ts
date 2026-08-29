@@ -95,10 +95,10 @@ export interface BenchmarkConfig {
  */
 export const DEFAULT_BENCHMARK_CONFIG: BenchmarkConfig = {
   // Books to run, in order. Each entry may override axes/runs/pipeline/judge/gates.
-  books: [{ id: "tom-sawyer" }, { id: "gullivers-travels" }],
+  books: [{ id: "tom-sawyer" }],
 
   // Sequential extraction passes per book per axis; metrics report mean ± variance.
-  runs: 3,
+  runs: 1,
 
   // Which axes to run: see AXES in types.ts.
   axes: ["extraction"],
@@ -109,7 +109,7 @@ export const DEFAULT_BENCHMARK_CONFIG: BenchmarkConfig = {
 
   // "stub" grades offline deterministically; "live" asks the Agnes-backed
   // equivalence judge (cached by input hash).
-  judge: "stub",
+  judge: "live",
 
   // Explicit client overrides — usually leave empty and use benchmarks/.env.
   agnes: {
@@ -134,7 +134,7 @@ export const DEFAULT_BENCHMARK_CONFIG: BenchmarkConfig = {
   format: "text",
 
   // "off" | "info" | "debug" — debug logs every API call and cache lookup.
-  logLevel: "info",
+  logLevel: "debug",
 
   // Validate all fixtures first and abort before any paid run on failure.
   validateFirst: true,

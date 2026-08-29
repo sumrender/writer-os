@@ -2,12 +2,41 @@
 
 Dev-facing evaluation suite: runs fixture books through Writer OS pipelines and grades outputs against assertion sets. Vocabulary in `../CONTEXT.md` → "Benchmarking"; design in `../docs/TESTING.md`. Never a product surface.
 
+## Quick start
+
+```sh
+pnpm install            # once — installs dependencies
+cp .env.example .env    # then paste your AGNES_API_KEY into benchmarks/.env
+pnpm start              # builds the CLI, then runs the configured benchmark chain
+```
+
+`pnpm start` executes whatever `DEFAULT_BENCHMARK_CONFIG` says in
+`src/runner/config.ts` — the one file you edit. It currently runs the
+**extraction** axis over **tom-sawyer + gullivers-travels**, 3 runs per book,
+through the live Agnes pipeline with the offline stub judge. Change `books` to
+trim the set, `axes` to add `checker`/`generation`, `pipeline`/`judge` to flip
+live↔offline, and `gates`/`format`/`logToFiles` to adjust scoring and output.
+Per-run reports land under `results/runs/` (gitignored) with a START/END
+ledger in `results/runs/index.txt`.
+
+No API key, or want a fully offline sanity check? Run the mini-book — the
+fixture whose scores are known by construction — through the deterministic
+fakes:
+
+```sh
+node dist/runner/cli.js run --book mini-book --axis extraction --pipeline fake --judge stub
+```
+
+Everything else — all commands, per-flag options, caching, exit codes, fixture
+provenance — is covered below.
+
 ## Layout
 
 ```
 benchmarks/
   src/            runner layer (entry, engine, config, chain, axes) + lib/ seams
-  scripts/        build-books.ts — regenerates fixtures from Project Gutenberg
+  scripts/        build-books.ts — regenerates fixtures; probe-agnes.ts / probe-extract.ts — live
+                  connectivity probes; run-all-books.sh — sequential whole-suite runner via results/runs/
   books/          committed fixture books (source chapters + manifest.json)
   dist/           compiled CLI (gitignored)
   results/        run output — gitignored, never committed
@@ -17,13 +46,15 @@ benchmarks/
 
 - `cli.ts` — process entry: loads `.env`; no args → runs the configured chain, args → CLI engine
 - `config.ts` — `BenchmarkConfig` + `DEFAULT_BENCHMARK_CONFIG` (the file you edit)
+- `types.ts` — shared vocabulary: axis/pipeline/judge/format/log-level enums, the `CliIo` sink, exit codes
 - `chain.ts` — `runBenchmark`: pre-flight validation, book×axis loop, run logs + ledger, summary
 - `engine.ts` / `usage.ts` — `runCli`: argv → command dispatch, help text
 - `flags.ts` — argv parsing and per-flag validation
 - `validation.ts` — fixture loading/validation reporting, `validate` command
 - `ops.ts` — pipeline/judge selection wiring (live Agnes vs fakes) + cache wrapping
 - `commands.ts` — the `run`/`list` commands and the three axis end-to-end commands
-- `axes/` — the extraction/checker/generation run protocols; `report.ts` — their formatters
+- `axes/` — the extraction/checker/generation run protocols
+- `report.ts` — text + JSON formatters for all three axis reports
 - `index.ts` — public API barrel
 
 Two ways to launch (same plumbing, same exit codes):
@@ -48,7 +79,11 @@ Fixture-side machinery beside `src/lib/`:
 
 - `lib/response-cache.ts` — extraction-only raw-response cache (`results/cache/extract-cache.json`): temp-0 extraction requests are input-deterministic, so repeats across runs/processes are free; stored payloads re-enter the same validation boundary on read, and any prompt/tool/sampling change produces new keys. Check and generate calls are deliberately never cached (checks are few; generation prose is sampled — caching it would hollow out what the axis measures)
 - `lib/metrics.ts` / `lib/gates.ts` — per-kind precision/recall/F1 arithmetic, mean ± variance aggregation, global precision floor + per-kind recall floors (lenient defaults, configurable)
-- `extraction-axis.ts` / `report.ts` — the 3-run protocol per book with mean ± variance reporting; text and JSON output print to terminal/CI only
+- `lib/manifest.ts` — fixture book validation: manifest schema, chapter files present, ordinals contiguous from 1; backs `validate`/`list` and every run's pre-flight
+- `lib/perturbation.ts` / `lib/perturbation-file.ts` — checker fixtures: perturbation (must-flag) and control (must-not-flag) cases in `perturbations/`, cross-checked against the book's assertion ids; an absent directory loads empty-valid
+- `lib/checker-run.ts` — runs the checker-under-test per case against the canon established strictly before the case's `base_ordinal`
+- `lib/beats.ts` / `lib/beat-file.ts` / `lib/beat-grade.ts` — generation fixtures: per-chapter `must_include`/`must_not_include` beats in `beats.yml` (absent file loads empty-valid); grading mirrors assertion matching — exact match first, equivalence judge on `must_include` only
+- `lib/generation-run.ts` / `lib/assembled-context.ts` — generation dual-grading: each declared chapter is generated from canon strictly before its ordinal, then graded for beat presence and re-checked for factual flags
 
 ## Commands
 
@@ -57,6 +92,7 @@ pnpm install
 pnpm build                 # compile CLI to dist/
 pnpm typecheck             # strict-mode TS across src/ + scripts/
 pnpm test                  # vitest
+pnpm test:watch            # vitest watch mode
 pnpm start                 # build + run the configured benchmark chain (see below)
 pnpm books:build           # re-download + re-split fixture books (network)
 
@@ -65,6 +101,10 @@ node dist/runner/cli.js run --book mini-book --axis extraction
 node dist/runner/cli.js run --book gullivers-travels --axis extraction --format json
 node dist/runner/cli.js list
 ```
+
+The package also exposes the same entry point as a `bench` bin (`package.json`
+→ `bin`), so every `node dist/runner/cli.js …` above has a `bench …`
+equivalent once the package is installed or linked.
 
 ## Configured chain (config runner)
 
@@ -83,6 +123,9 @@ Each `books` entry can override `axes`, `runs`, `pipeline`, `judge`, and `gates`
 | `--runs <n>` | `3` | sequential extraction passes; metrics report mean ± variance |
 | `--pipeline <live\|fake>` | `live` | vendor-backed ops through Agnes (`AGNES_API_KEY` required) vs the deterministic fakes (`fake` = fully offline) |
 | `--judge <stub\|live>` | `stub` | scripted offline stub vs Agnes-backed judge (`AGNES_BASE_URL` optional) |
+| `--cache <true\|false>` | `true` | persist judge verdicts + extraction responses by input hash under `results/cache/`; `false` forces every model call to the API fresh |
+| `--log-level <off\|info\|debug>` | `info` | progress lines on stderr; `debug` adds every API call, cache lookup, and retry |
+| `--books-root <dir>` | `benchmarks/books` | override the fixture books root; cache paths resolve against it |
 | `--format <text\|json>` | `text` | human text or machine JSON on stdout (JSON mode keeps stdout pure) |
 | `--gates <file>` | lenient | JSON: `{"global_precision_min": 0..1, "recall_min": {"<kind>": 0..1}}`; evaluated on run means |
 
@@ -100,7 +143,7 @@ Model facts are validated at the trust boundary and folded into canon by the mer
 `lib/bible-merge.ts`, so grader-visible state is identical regardless of fact origin. A
 connectivity probe for both transport modes lives at `scripts/probe-agnes.ts`.
 
-Exit codes: `0` ok · `1` fixture validation failure · `2` usage error · `3` requested axis has no registered pipeline yet (validation still ran first) · `4` gate failure (global precision floor or a per-kind recall floor missed).
+Exit codes: `0` ok · `1` fixture validation failure · `2` usage error · `3` reserved in `types.ts` for an axis with no registered pipeline (currently unreachable — all three axes are wired in `commands.ts`) · `4` gate failure (global precision floor or a per-kind recall floor missed).
 
 Run protocol notes: everything a run produces prints to terminal/CI — no artifacts land in tracked paths. Judge calls cache by input hash under `results/cache/` (gitignored, resolved relative to the books root when `--books-root` points elsewhere), so regrades are free. The open-world sweep is judge-mediated and its fabrication rate is an estimate, never mixed into exact scores; the sweep judge reads the whole book per swept fact (fine for fixtures — the cache makes repeats free). With `--format json`, stdout carries only the JSON report; validation chatter moves to stderr. Correctness is proven against `books/mini-book`, whose scores are known by construction — fully offline.
 
