@@ -51,7 +51,17 @@ const SUMMARY_INPUT = {
 
 const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
   bookOverview: "An overview.",
-  world: [{ topic: "the light", note: "burns without oil" }],
+  world: {
+    classification: "earth",
+    description: "An earth-like world.",
+    rules: [
+      {
+        rule: "The story's world follows real-world (earth) rules.",
+        relation: "same_as_earth",
+        note: "Canon establishes no deviation.",
+      },
+    ],
+  },
   characterProfiles: ["Bare Name"],
   locationProfiles: [{ name: "the light", profile: "A lighthouse." }],
   threadRollups: [{ thread: "the ledger", status: "open", rollup: "r" }],
@@ -228,7 +238,7 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
     const { client, requests } = scriptedClient([
       bibleResponse({
         book_overview: "An overview.",
-        world: [],
+        world: { classification: "earth", description: "", rules: [] },
         character_profiles: [],
         location_profiles: [],
         thread_rollups: [],
@@ -275,7 +285,7 @@ describe("synthesis response cache", () => {
     const responses = [
       bibleResponse({
         book_overview: "An overview.",
-        world: [],
+        world: { classification: "earth", description: "", rules: [] },
         character_profiles: [],
         location_profiles: [],
         thread_rollups: [],

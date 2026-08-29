@@ -154,10 +154,32 @@ describe("mini-book fixture", () => {
     expect(bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
     const finalBible = bibleSnapshots.at(-1)?.bible;
     expect(finalBible?.chapterSummaries).toEqual(summaries);
-    // Placeholders: every model section ships valid and empty.
+    // Placeholders: every model section ships valid and empty — except the
+    // World slice (issue #16), which the fake derives from the canon at every
+    // ordinal: earth baseline until chapter 3 establishes a deviating rule.
     expect(finalBible?.bookOverview).toBe("");
     expect(finalBible?.characterProfiles).toEqual([]);
     expect(finalBible?.locationProfiles).toEqual([]);
+    for (const snapshot of bibleSnapshots) {
+      expect(snapshot.bible.world.classification).not.toBe("");
+      expect(snapshot.bible.world.description).not.toBe("");
+      expect(snapshot.bible.world.rules.length).toBeGreaterThan(0);
+    }
+    expect(bibleSnapshots.slice(0, 2).map((s) => s.bible.world.classification)).toEqual([
+      "earth",
+      "earth",
+    ]);
+    expect(bibleSnapshots.slice(2).map((s) => s.bible.world.classification)).toEqual([
+      "hybrid",
+      "hybrid",
+    ]);
+    expect(finalBible?.world.rules).toEqual([
+      {
+        rule: "the northern light burns without oil",
+        relation: "deviates_from_earth",
+        note: 'Canon establishes "the northern light burns without oil", which real-world (earth) rules do not allow.',
+      },
+    ]);
     // The derived graph: Mara Vey is mentioned 5 times, Joren Vey 4.
     expect(finalBible?.graph.nodes).toEqual([
       { name: "Mara Vey", importance: 5, role: "protagonist" },

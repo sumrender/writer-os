@@ -218,7 +218,7 @@ describe("fakeSynthesizeBible", () => {
 
     expect(bible.chapterSummaries).toEqual(summaries);
     const { chapterSummaries: _carried, graph, ...sections } = bible;
-    expect(sections).toEqual(fakeModelSections());
+    expect(sections).toEqual(fakeModelSections({ chapters, facts, summaries }));
     expect(graph.nodes).toEqual([
       { name: "Mara Vey", importance: 1, role: "protagonist" },
       { name: "Joren Vey", importance: 1, role: "supporting" },

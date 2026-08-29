@@ -1,5 +1,13 @@
 import { isPlainObject, nonEmptyString, positiveInt } from "./schema-primitives.js";
-import { THREAD_STATUSES, type ThreadStatus } from "./story-facts.js";
+import { failSection } from "./section-errors.js";
+import { THREAD_STATUSES, type ThreadStatus, type StoryFacts } from "./story-facts.js";
+import type { BibleSynthesisInput } from "./pipeline.js";
+import {
+  WORLD_INSTRUCTION,
+  WORLD_WIRE_SCHEMA,
+  fakeWorld,
+  validateWorld,
+} from "./world-section.js";
 import type {
   LexiconNote,
   ModelSectionKey,
@@ -9,7 +17,7 @@ import type {
   ProfileEntry,
   StyleField,
   ThreadRollup,
-  WorldNote,
+  WorldSection,
 } from "./story-bible.js";
 
 /**
@@ -24,10 +32,12 @@ import type {
 
 /** Tool-schema shape of one section's value on the synthesis wire. */
 export type SectionWireSchema =
-  | { readonly type: "string" }
+  | { readonly type: "string"; readonly enum?: readonly string[] }
+  | { readonly type: "array"; readonly items: SectionWireSchema }
   | {
-      readonly type: "array";
-      readonly items: { readonly type: "object" } | { readonly type: "string" };
+      readonly type: "object";
+      readonly properties?: { readonly [key: string]: SectionWireSchema };
+      readonly required?: readonly string[];
     };
 
 export interface BibleSectionSpec<K extends ModelSectionKey> {
@@ -40,27 +50,17 @@ export interface BibleSectionSpec<K extends ModelSectionKey> {
   /**
    * Trust-boundary validation: returns the precisely-typed section value or
    * throws with a `near:` raw-payload snippet. Unknown fields are dropped,
-   * recoverable shapes normalized, missing/ambiguous shapes rejected.
+   * recoverable shapes normalized, missing/ambiguous shapes rejected. The
+   * canon (Story Facts) is passed so sections can reject content the canon
+   * does not support (issue #16); sections that need no canon check ignore it.
    */
-  readonly validate: (raw: unknown) => ModelSections[K];
-  /** Deterministic baseline fake: a valid EMPTY placeholder. */
-  readonly fake: () => ModelSections[K];
-}
-
-const SNIPPET_MAX = 160;
-
-function snippet(raw: unknown): string {
-  let text: string;
-  try {
-    text = raw === undefined ? "undefined" : (JSON.stringify(raw) ?? String(raw));
-  } catch {
-    text = String(raw);
-  }
-  return text.slice(0, SNIPPET_MAX);
-}
-
-function failSection(where: string, problem: string, raw: unknown): never {
-  throw new Error(`${where}: ${problem} near: ${snippet(raw)}`);
+  readonly validate: (raw: unknown, canon: StoryFacts) => ModelSections[K];
+  /**
+   * Deterministic fake deriving the section from the synthesis inputs.
+   * Baseline sections still emit valid EMPTY placeholders; aspects with real
+   * derivation logic (e.g. World, issue #16) populate from the canon.
+   */
+  readonly fake: (input: BibleSynthesisInput) => ModelSections[K];
 }
 
 /** A bare mention the model emitted where an object entry was expected. */
@@ -138,18 +138,10 @@ const REGISTRY = {
   world: {
     key: "world",
     wireKey: "world",
-    instruction:
-      "world: notes on the world's rules, settings, and background as established by canon. Value: an array of {topic, note} objects.",
-    wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly WorldNote[] =>
-      parseObjectArray<WorldNote>(
-        "world",
-        raw,
-        { identity: "topic", secondary: "note" },
-        (topic, note) => ({ topic, note }),
-        (topic) => ({ topic, note: "" }),
-      ),
-    fake: () => [],
+    instruction: WORLD_INSTRUCTION,
+    wireSchema: WORLD_WIRE_SCHEMA,
+    validate: (raw, canon): WorldSection => validateWorld(raw, canon),
+    fake: (input): WorldSection => fakeWorld(input),
   },
   characterProfiles: {
     key: "characterProfiles",
@@ -349,46 +341,62 @@ function requireSectionValue(
 /**
  * Master monolithic validator: a flat payload of wireKey properties, unknown
  * top-level keys dropped, every section validated by its registered
- * validator, a missing section rejected. Genuinely malformed or ambiguous
- * section values propagate the precise per-section rejection — nothing
- * silently reaches the bible.
+ * validator against the canon, a missing section rejected. Genuinely
+ * malformed or ambiguous section values propagate the precise per-section
+ * rejection — nothing silently reaches the bible.
  */
-export function validateBible(raw: unknown): ModelSections {
+export function validateBible(raw: unknown, canon: StoryFacts): ModelSections {
   if (!isPlainObject(raw)) {
     failSection("bible", "payload must be an object", raw);
   }
   return {
     bookOverview: BIBLE_SECTIONS.bookOverview.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.bookOverview.wireKey),
+      canon,
     ),
-    world: BIBLE_SECTIONS.world.validate(requireSectionValue(raw, BIBLE_SECTIONS.world.wireKey)),
+    world: BIBLE_SECTIONS.world.validate(
+      requireSectionValue(raw, BIBLE_SECTIONS.world.wireKey),
+      canon,
+    ),
     characterProfiles: BIBLE_SECTIONS.characterProfiles.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.characterProfiles.wireKey),
+      canon,
     ),
     locationProfiles: BIBLE_SECTIONS.locationProfiles.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.locationProfiles.wireKey),
+      canon,
     ),
     threadRollups: BIBLE_SECTIONS.threadRollups.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.threadRollups.wireKey),
+      canon,
     ),
-    groups: BIBLE_SECTIONS.groups.validate(requireSectionValue(raw, BIBLE_SECTIONS.groups.wireKey)),
+    groups: BIBLE_SECTIONS.groups.validate(
+      requireSectionValue(raw, BIBLE_SECTIONS.groups.wireKey),
+      canon,
+    ),
     itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.itemsOfSignificance.wireKey),
+      canon,
     ),
     lexiconNotes: BIBLE_SECTIONS.lexiconNotes.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.lexiconNotes.wireKey),
+      canon,
     ),
     openLoops: BIBLE_SECTIONS.openLoops.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.openLoops.wireKey),
+      canon,
     ),
     styleRollup: BIBLE_SECTIONS.styleRollup.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.styleRollup.wireKey),
+      canon,
     ),
     worldTimeline: BIBLE_SECTIONS.worldTimeline.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.worldTimeline.wireKey),
+      canon,
     ),
     bookTimeline: BIBLE_SECTIONS.bookTimeline.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.bookTimeline.wireKey),
+      canon,
     ),
   };
 }
@@ -408,19 +416,19 @@ export function bibleMasterPrompt(): string {
 }
 
 /** Deterministic fake dispatch across every registered section fake. */
-export function fakeModelSections(): ModelSections {
+export function fakeModelSections(input: BibleSynthesisInput): ModelSections {
   return {
-    bookOverview: BIBLE_SECTIONS.bookOverview.fake(),
-    world: BIBLE_SECTIONS.world.fake(),
-    characterProfiles: BIBLE_SECTIONS.characterProfiles.fake(),
-    locationProfiles: BIBLE_SECTIONS.locationProfiles.fake(),
-    threadRollups: BIBLE_SECTIONS.threadRollups.fake(),
-    groups: BIBLE_SECTIONS.groups.fake(),
-    itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.fake(),
-    lexiconNotes: BIBLE_SECTIONS.lexiconNotes.fake(),
-    openLoops: BIBLE_SECTIONS.openLoops.fake(),
-    styleRollup: BIBLE_SECTIONS.styleRollup.fake(),
-    worldTimeline: BIBLE_SECTIONS.worldTimeline.fake(),
-    bookTimeline: BIBLE_SECTIONS.bookTimeline.fake(),
+    bookOverview: BIBLE_SECTIONS.bookOverview.fake(input),
+    world: BIBLE_SECTIONS.world.fake(input),
+    characterProfiles: BIBLE_SECTIONS.characterProfiles.fake(input),
+    locationProfiles: BIBLE_SECTIONS.locationProfiles.fake(input),
+    threadRollups: BIBLE_SECTIONS.threadRollups.fake(input),
+    groups: BIBLE_SECTIONS.groups.fake(input),
+    itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.fake(input),
+    lexiconNotes: BIBLE_SECTIONS.lexiconNotes.fake(input),
+    openLoops: BIBLE_SECTIONS.openLoops.fake(input),
+    styleRollup: BIBLE_SECTIONS.styleRollup.fake(input),
+    worldTimeline: BIBLE_SECTIONS.worldTimeline.fake(input),
+    bookTimeline: BIBLE_SECTIONS.bookTimeline.fake(input),
   };
 }
