@@ -6,12 +6,16 @@ Domain language for Writer OS: a SaaS that helps serialized-fiction writers keep
 
 ### Story & canon
 
+**Story Facts**:
+The graded fact store: atomic, per-chapter, source-verifiable canon facts, versioned as of chapter N. Not a readable document — the readable derivation is the Story Bible.
+_Avoid_: bible state, fact dump, Story Bible (that is the synthesized document, a different layer)
+
 **Story Bible**:
-The structured source of truth for a story: characters, locations, plot threads, world rules, style guide, lexicon, and related entities. Queryable by generators and the checker; never a free-text blob where structure matters.
+The author-facing reference document synthesized from Story Facts plus chapter prose: overview, character and location profiles, chapter summaries, plot-thread rollups, timelines, and more. A derivation, never the store of facts itself.
 _Avoid_: lorebook, lore document, bible file
 
 **Canon**:
-The body of facts a story has established, as represented in the Story Bible at a given point in manuscript progress.
+The body of facts a story has established, as represented in the Story Facts at a given point in manuscript progress.
 _Avoid_: lore, truth
 
 **Canon change**:
@@ -27,7 +31,7 @@ A chapter's position in the story's manuscript order as tracked inside Writer OS
 _Avoid_: chapter number (ambiguous with external platforms' numbering)
 
 **In-world timeline**:
-A story's internal chronology, kept as Story Bible data. Used by generation and checking; never used as the key for canon-state version lookups.
+A story's internal chronology, kept as Story Facts. Used by generation and checking; never used as the key for canon-state version lookups.
 
 **Published (in Writer OS)**:
 A chapter's status after passing the Consistency Checker with the writer's approval of proposed canon changes. Internal to Writer OS; distinct from exporting/copying to an external platform.
@@ -47,7 +51,7 @@ The typed, human-verified claims encoding a fixture book's ground truth: facts t
 _Avoid_: golden bible (that rejected form has no polarity or evidence), ground truth file
 
 **Extraction**:
-Building a Story Bible incrementally from finished chapter prose, chapter by chapter in manuscript order. Currently benchmark-internal; distinct from the deliberately deferred import feature.
+Building Story Facts incrementally from finished chapter prose, chapter by chapter in manuscript order. Currently benchmark-internal; distinct from the deliberately deferred import feature.
 _Avoid_: import (reserved for a future product surface), ingestion
 
 **Fabrication**:

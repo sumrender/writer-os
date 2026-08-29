@@ -15,7 +15,7 @@ import { applyFact, type ExtractedFact } from "./fact-merge.js";
 /**
  * Rule-based deterministic pipeline fakes. The mini-book fixture
  * (books/mini-book) is written against the same sentence grammar, so fake
- * extraction over it yields hand-computable facts states.
+ * extraction over it yields hand-computable fact states.
  *
  * Grammar — one fact per line, exact templates, case-sensitive:
  *   Introducing <Name>, <tagline>.                       → character

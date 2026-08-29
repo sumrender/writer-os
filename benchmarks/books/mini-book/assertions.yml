@@ -52,7 +52,7 @@ assertions:
     holder: Joren Vey
     as_of: 4
     evidence: [2, 4]
-    note: Holder changes hands in ch4; graded against bible state as of ordinal 4.
+    note: Holder changes hands in ch4; graded against Story Facts as of ordinal 4.
 
   # negative probe: guards the holder swap used by later checker perturbations
   - id: item-compass-not-bellins

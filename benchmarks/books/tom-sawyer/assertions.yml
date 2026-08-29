@@ -151,7 +151,7 @@ assertions:
     type: full brother
     evidence: [1]
     note: Text says Sid is Tom's HALF-brother; upgrading to full sibling is a
-      precision loss the bible must not make.
+      precision loss Story Facts must not make.
 
   - id: rel-mary-tom-cousin
     kind: relationship

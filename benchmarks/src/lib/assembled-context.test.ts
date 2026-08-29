@@ -7,7 +7,7 @@ describe("renderAssembledContext", () => {
     expect(renderAssembledContext(emptyStoryFacts())).toBe("(no canon established yet)");
   });
 
-  it("renders every established fact as one line, in facts order", () => {
+  it("renders every established fact as one line, in stored order", () => {
     const state = {
       ...emptyStoryFacts(),
       characters: [{ name: "Mara Vey" }],

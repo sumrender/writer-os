@@ -137,7 +137,7 @@ function RunDetail() {
   if (missing) {
     return (
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-6 text-center">
-        <p className="text-sm text-zinc-300">Run "{runId}" was not found.</p>
+        <p className="text-sm text-zinc-300">Run “{runId}” was not found.</p>
         <Link to="/" className="mt-2 inline-block text-sm text-emerald-400 hover:underline">
           ← back to all runs
         </Link>

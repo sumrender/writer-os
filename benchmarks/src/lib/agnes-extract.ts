@@ -46,7 +46,7 @@ const EXTRACT_TOOL = {
   type: "function",
   function: {
     name: "record_facts",
-    description: "Record Story Facts facts newly established by this chapter.",
+    description: "Record facts newly established by this chapter.",
     parameters: {
       type: "object",
       properties: {
