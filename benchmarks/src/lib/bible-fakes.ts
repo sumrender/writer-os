@@ -1,8 +1,8 @@
 import { factCount, isThreadStatus, type StoryFacts, type ThreadStatus } from "./story-facts.js";
 import {
   emptyBookOverview,
-  type BibleSynthesisContext,
   type BookOverview,
+  type SectionCanon,
   type ThreadRollup,
 } from "./story-bible.js";
 
@@ -53,11 +53,11 @@ export function fakeBookOverview(facts: StoryFacts): BookOverview {
 }
 
 /** The thread-rollup deterministic baseline (issue #19). */
-export function fakeThreadRollups(input: BibleSynthesisContext): readonly ThreadRollup[] {
-  return input.facts.threads.map((entry) => ({
+export function fakeThreadRollups(canon: SectionCanon): readonly ThreadRollup[] {
+  return canon.facts.threads.map((entry) => ({
     thread: entry.thread,
     status: entry.status,
-    rollup: threadArc(input, entry.thread, entry.status),
+    rollup: threadArc(canon, entry.thread, entry.status),
   }));
 }
 
@@ -67,8 +67,8 @@ export function fakeThreadRollups(input: BibleSynthesisContext): readonly Thread
  * (the last asserted status is the canon's own). Falls back to a statement
  * of the canon when no summary mentions the thread.
  */
-function threadArc(input: BibleSynthesisContext, thread: string, status: ThreadStatus): string {
-  const mentions = input.summaries.flatMap((summary) =>
+function threadArc(canon: SectionCanon, thread: string, status: ThreadStatus): string {
+  const mentions = canon.chapterSummaries.flatMap((summary) =>
     threadStatusAssertions(summary.summary)
       .filter((assertion) => assertion.thread === thread)
       .map((assertion) => ({ ordinal: summary.ordinal, status: assertion.status })),

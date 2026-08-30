@@ -59,17 +59,50 @@ const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
     synopsis: 'plot thread "the ledger" stands open',
     themes: "light",
   },
-  world: [{ topic: "the light", note: "burns without oil" }],
-  characterProfiles: ["Bare Name"],
-  locationProfiles: [{ name: "the light", profile: "A lighthouse." }],
+  world: {
+    classification: "earth",
+    description: "An earth-like world.",
+    rules: [
+      {
+        rule: "The story's world follows real-world (earth) rules.",
+        relation: "same_as_earth",
+        note: "Canon establishes no deviation.",
+      },
+    ],
+  },
+  // The model's character-profile response: names grounded in BIBLE_INPUT's
+  // facts, ordinals within the summaries' range. Missing prose aspects are
+  // normalized to "" by the validator — asserted below.
+  characterProfiles: [{ name: "Mara Vey", firstAppearanceOrdinal: 1, mentionOrdinals: [1, 2] }],
+  locations: [
+    {
+      name: "the light",
+      description: "A lighthouse.",
+      significance: "Anchors the keeper's daily round.",
+      charactersSeen: [],
+    },
+  ],
   threadRollups: [{ thread: "the ledger", status: "open", rollup: "r" }],
   groups: [],
   itemsOfSignificance: [{ name: "brass compass", description: "Points wrong." }],
   lexiconNotes: [],
   openLoops: [{ description: "Who burned it?", openedAtOrdinal: 1 }],
   styleRollup: [{ field: "narration", value: "close third" }],
-  worldTimeline: ["event one"],
-  bookTimeline: ["event two"],
+  worldTimeline: [{ event: "event one", grounding: "stated" }],
+  bookTimeline: [{ ordinal: 1, events: ["event two"] }],
+};
+
+/** The canon-grounded profile the synthesizer must produce for BIBLE_INPUT. */
+const MARA_PROFILE = {
+  name: "Mara Vey",
+  appearance: "",
+  personality: "",
+  definingTraits: [],
+  background: "",
+  arc: "",
+  firstAppearanceOrdinal: 1,
+  mentionOrdinals: [1, 2],
+  relationships: [],
 };
 
 const SECTION_RESPONSES = MODEL_SECTION_KEYS.map((key) => sectionResponse(SECTION_VALUES[key]));
@@ -82,7 +115,8 @@ const BIBLE_INPUT = (): {
   chapters: ["Chapter one text.", "Chapter two text."],
   facts: {
     ...emptyStoryFacts(),
-    characters: [{ name: "Bare Name" }],
+    characters: [{ name: "Mara Vey" }],
+    relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
     locations: [{ name: "the light" }],
     threads: [{ thread: "the ledger", status: "open" }],
   },
@@ -196,14 +230,18 @@ describe("createAgnesBibleSynthesizer — per-section", () => {
       expect(String(requests[index]?.user)).toContain(BIBLE_SECTIONS[key].instruction);
       expect(String(requests[index]?.user)).toContain("Chapter 2: Two.");
     }
-    // Validators normalized the recoverable bare-string character profile.
-    expect(bible.characterProfiles).toEqual([{ name: "Bare Name", profile: "" }]);
+    // Validators normalize the profile's missing prose aspects to "".
+    expect(bible.characterProfiles).toEqual([MARA_PROFILE]);
     expect(bible.bookOverview).toEqual(SECTION_VALUES.bookOverview);
     expect(bible.chapterSummaries).toEqual(input.summaries);
-    // The graph derives from the input facts, not the model's sections.
+    // The graph derives deterministically from the input facts: the character
+    // node plus the relationship endpoint, with the relationship edge.
     expect(bible.graph).toEqual({
-      nodes: [{ name: "Bare Name", importance: 0, role: "protagonist" }],
-      edges: [],
+      nodes: [
+        { name: "Mara Vey", importance: 0, role: "protagonist" },
+        { name: "Joren Vey", importance: 0, role: "supporting" },
+      ],
+      edges: [{ from: "Mara Vey", to: "Joren Vey", relation: "daughter" }],
     });
   });
 
@@ -245,9 +283,9 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
     const { client, requests } = scriptedClient([
       bibleResponse({
         book_overview: SECTION_VALUES.bookOverview,
-        world: [],
-        character_profiles: [],
-        location_profiles: [],
+        world: { classification: "earth", description: "", rules: [] },
+        character_profiles: [MARA_PROFILE],
+        locations: [],
         thread_rollups: [],
         groups: [],
         items_of_significance: [],
@@ -268,7 +306,9 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
     const prompt = String(requests[0]?.user);
     expect(prompt).toContain("book_overview:");
     expect(prompt).toContain("book_timeline:");
+    expect(prompt).toContain("character_profiles:");
     expect(bible.bookOverview).toEqual(SECTION_VALUES.bookOverview);
+    expect(bible.characterProfiles).toEqual([MARA_PROFILE]);
     expect(bible.chapterSummaries).toEqual(input.summaries);
   });
 
@@ -292,9 +332,9 @@ describe("synthesis response cache", () => {
     const responses = [
       bibleResponse({
         book_overview: SECTION_VALUES.bookOverview,
-        world: [],
-        character_profiles: [],
-        location_profiles: [],
+        world: { classification: "earth", description: "", rules: [] },
+        character_profiles: [MARA_PROFILE],
+        locations: [],
         thread_rollups: [],
         groups: [],
         items_of_significance: [],

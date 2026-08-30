@@ -1,45 +1,63 @@
-import { isPlainObject, nonEmptyString, positiveInt } from "./schema-primitives.js";
-import { factCount, isThreadStatus, THREAD_STATUSES, type StoryFacts } from "./story-facts.js";
-import { threadStatusAssertions } from "./bible-fakes.js";
+import {
+  failSection,
+  isPlainObject,
+  nonEmptyString,
+  positiveInt,
+} from "./schema-primitives.js";
+import {
+  THREAD_STATUSES,
+  factCount,
+  isThreadStatus,
+  type StoryFacts,
+} from "./story-facts.js";
+import type { SectionWireSchema } from "./section-wire.js";
+import { fakeCharacterProfiles, validateCharacterProfiles } from "./character-profiles.js";
+import {
+  WORLD_INSTRUCTION,
+  WORLD_WIRE_SCHEMA,
+  fakeWorld,
+  validateWorld,
+} from "./world-section.js";
+import { fakeBookOverview, fakeThreadRollups, threadStatusAssertions } from "./bible-fakes.js";
 import type {
-  BibleSynthesisContext,
   BookOverview,
+  BookTimelineEntry,
   LexiconNote,
+  LocationCharacterSeen,
+  LocationProfile,
   ModelSectionKey,
   ModelSections,
   NamedDescription,
   OpenLoop,
-  ProfileEntry,
+  SectionCanon,
   StyleField,
   ThreadRollup,
-  WorldNote,
+  TimelineGrounding,
+  WorldSection,
+  WorldTimelineEvent,
 } from "./story-bible.js";
-import { fakeBookOverview, fakeThreadRollups } from "./bible-fakes.js";
-import { emptyStoryFacts } from "./story-facts.js";
+import { TIMELINE_GROUNDINGS } from "./story-bible.js";
 
 /**
- * Composition machinery for Story Bible synthesis (issue #14, ADR-0007): the
+ * Composition machinery for Story Bible synthesis (issue #14, #17, #19): the
  * registry through which every aspect contributes its section's prompt block,
  * wire shape, validator, and deterministic fake. The master prompt assembles
  * the per-section blocks; the master `validateBible` delegates per-section
- * validation; the deterministic fake dispatches per-section fakes. Aspects
- * grow the bible by adding registry entries — the machinery itself never
- * edits a stable core per section (CODING_STANDARDS §3.2). The overview and
+ * validation; the deterministic fake dispatches per-section fakes. Validators
+ * and fakes see the section canon (facts + summaries so far, issue #15), so
+ * aspects ground their sections — e.g. character profiles reject unsourced
+ * entities — and fakes populate from the same canon. The overview and
  * thread-rollup sections (issue #19) carry canon-grounded validators and
- * fakes; every other section stays a shape-only validator and an empty fake.
+ * fakes. Aspects grow the bible by adding registry entries — the machinery
+ * itself never edits a stable core per section (CODING_STANDARDS §3.2).
  */
 
-/** Tool-schema shape of one section's value on the synthesis wire. */
-export type SectionWireSchema =
-  | { readonly type: "string" }
-  | {
-      readonly type: "object";
-      readonly properties: Readonly<Record<string, { readonly type: "string" }>>;
-    }
-  | {
-      readonly type: "array";
-      readonly items: { readonly type: "object" } | { readonly type: "string" };
-    };
+/**
+ * Tool-schema shape of one section's value on the synthesis wire. Lives in
+ * `section-wire.ts` so section modules (e.g. World) can type their schema
+ * against it without importing this module's values back (one-way deps).
+ */
+export type { SectionWireSchema } from "./section-wire.js";
 
 export interface BibleSectionSpec<K extends ModelSectionKey> {
   readonly key: K;
@@ -49,37 +67,26 @@ export interface BibleSectionSpec<K extends ModelSectionKey> {
   readonly instruction: string;
   readonly wireSchema: SectionWireSchema;
   /**
-   * Trust-boundary validation: returns the precisely-typed section value or
-   * throws with a `near:` raw-payload snippet. Unknown fields are dropped,
-   * recoverable shapes normalized, missing/ambiguous shapes rejected.
-   * Sections whose content must be grounded in canon (overview, thread
-   * rollups) additionally reject values the graded Story Facts do not
-   * support — invented threads, status changes without a basis in the
-   * fact layer, plot events the canon has not established.
+   * Trust-boundary validation against the section canon: returns the
+   * precisely-typed section value or throws with a `near:` raw-payload
+   * snippet. Unknown fields are dropped, recoverable shapes normalized,
+   * missing/ambiguous shapes rejected. Sections ground against the canon to
+   * reject content it does not support (issue #15: unsourced characters;
+   * issue #16: unsupported world deviations; issue #19: invented threads and
+   * status changes without a basis in the fact layer); sections needing no
+   * check ignore it. The locations section (issue #17) stays pure-shape here:
+   * its grounding consults the raw chapter texts, which the section canon
+   * deliberately excludes, so the synthesis caller layers the grounding
+   * checks on top (see `grounded-locations.ts`).
    */
-  readonly validate: (raw: unknown, canon: StoryFacts) => ModelSections[K];
+  readonly validate: (raw: unknown, canon: SectionCanon) => ModelSections[K];
   /**
-   * Deterministic baseline fake. Sections that synthesize prose over canon
-   * derive their value from {@link BibleSynthesisContext}; every other
-   * section ships its valid empty placeholder.
+   * Deterministic fake seen through the section canon: an EMPTY placeholder
+   * whenever the canon establishes nothing, canon-grounded content otherwise
+   * (e.g. World, issue #16, derives even from bare canon; the overview and
+   * thread rollups, issue #19).
    */
-  readonly fake: (input: BibleSynthesisContext) => ModelSections[K];
-}
-
-const SNIPPET_MAX = 160;
-
-function snippet(raw: unknown): string {
-  let text: string;
-  try {
-    text = raw === undefined ? "undefined" : (JSON.stringify(raw) ?? String(raw));
-  } catch {
-    text = String(raw);
-  }
-  return text.slice(0, SNIPPET_MAX);
-}
-
-function failSection(where: string, problem: string, raw: unknown): never {
-  throw new Error(`${where}: ${problem} near: ${snippet(raw)}`);
+  readonly fake: (canon: SectionCanon) => ModelSections[K];
 }
 
 /** A bare mention the model emitted where an object entry was expected. */
@@ -246,6 +253,77 @@ function assertThreadRollupsGrounded(rollups: readonly ThreadRollup[], canon: St
   }
 }
 
+function isTimelineGrounding(value: unknown): value is TimelineGrounding {
+  return typeof value === "string" && (TIMELINE_GROUNDINGS as readonly string[]).includes(value);
+}
+
+/**
+ * Strict structural validation for the `locations` section (issue #17).
+ * Pure shape: no grounding context consulted. The grounding-aware variant
+ * lives in `grounded-locations.ts` and imports this parser.
+ */
+export function parseLocations(raw: unknown): readonly LocationProfile[] {
+  if (!Array.isArray(raw)) {
+    failSection("locations", "must be an array of {name, description, significance, charactersSeen} entries", raw);
+  }
+  return raw.map((entry, index): LocationProfile => {
+    if (!isPlainObject(entry)) {
+      failSection(
+        "locations",
+        `entry #${index} must be an object with a non-empty "name"`,
+        entry,
+      );
+    }
+    const name = entry["name"];
+    if (!nonEmptyString(name)) {
+      failSection("locations", `entry #${index} "name" must be a non-empty string`, entry);
+    }
+    const description = entry["description"];
+    if (!nonEmptyString(description)) {
+      failSection("locations", `entry #${index} "description" must be a non-empty string`, entry);
+    }
+    const significance = entry["significance"];
+    if (!nonEmptyString(significance)) {
+      failSection("locations", `entry #${index} "significance" must be a non-empty string`, entry);
+    }
+    const charactersSeenRaw = entry["charactersSeen"];
+    if (!Array.isArray(charactersSeenRaw)) {
+      failSection(
+        "locations",
+        `entry #${index} "charactersSeen" must be an array of {character, firstCoOccurrenceOrdinal} entries`,
+        entry,
+      );
+    }
+    const charactersSeen: LocationCharacterSeen[] = charactersSeenRaw.map((seen, seenIndex) => {
+      if (!isPlainObject(seen)) {
+        failSection(
+          "locations",
+          `entry #${index} "charactersSeen" #${seenIndex} must be an object`,
+          seen,
+        );
+      }
+      const character = seen["character"];
+      if (!nonEmptyString(character)) {
+        failSection(
+          "locations",
+          `entry #${index} "charactersSeen" #${seenIndex} "character" must be a non-empty string`,
+          seen,
+        );
+      }
+      const firstCoOccurrenceOrdinal = seen["firstCoOccurrenceOrdinal"];
+      if (!positiveInt(firstCoOccurrenceOrdinal)) {
+        failSection(
+          "locations",
+          `entry #${index} "charactersSeen" #${seenIndex} "firstCoOccurrenceOrdinal" must be a positive integer`,
+          seen,
+        );
+      }
+      return { character, firstCoOccurrenceOrdinal };
+    });
+    return { name, description, significance, charactersSeen };
+  });
+}
+
 const REGISTRY = {
   bookOverview: {
     key: "bookOverview",
@@ -269,7 +347,7 @@ const REGISTRY = {
     },
     validate: (raw, canon): BookOverview => {
       const overview = parseBookOverview(raw);
-      assertBookOverviewGrounded(overview, canon);
+      assertBookOverviewGrounded(overview, canon.facts);
       return overview;
     },
     fake: ({ facts }) => fakeBookOverview(facts),
@@ -277,49 +355,34 @@ const REGISTRY = {
   world: {
     key: "world",
     wireKey: "world",
-    instruction:
-      "world: notes on the world's rules, settings, and background as established by canon. Value: an array of {topic, note} objects.",
-    wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly WorldNote[] =>
-      parseObjectArray<WorldNote>(
-        "world",
-        raw,
-        { identity: "topic", secondary: "note" },
-        (topic, note) => ({ topic, note }),
-        (topic) => ({ topic, note: "" }),
-      ),
-    fake: () => [],
+    instruction: WORLD_INSTRUCTION,
+    wireSchema: WORLD_WIRE_SCHEMA,
+    validate: (raw, canon): WorldSection => validateWorld(raw, canon.facts),
+    fake: (canon): WorldSection => fakeWorld(canon),
   },
   characterProfiles: {
     key: "characterProfiles",
     wireKey: "character_profiles",
-    instruction:
-      "character_profiles: per-character profile distillations drawn from canon. Value: an array of {name, profile} objects.",
+    instruction: [
+      "character_profiles: one profile per established character, distilled from Story Facts and chapter summaries — never from the chapter text alone.",
+      "Value: an array of {name, appearance, personality, definingTraits, background, arc, firstAppearanceOrdinal, mentionOrdinals, relationships} objects where",
+      "appearance/personality/background/arc are prose (leave a field empty only when the canon establishes nothing for it),",
+      "definingTraits is an array of short trait strings, firstAppearanceOrdinal is the first chapter ordinal mentioning the character,",
+      "mentionOrdinals is the ascending list of chapter ordinals mentioning the character (it must include firstAppearanceOrdinal),",
+      "and relationships is an array of {other, summary} objects — other is the counterpart's exact canon name and summary is the relationship in prose.",
+      "Every established character needs exactly one profile; never introduce a name the canon does not establish.",
+    ].join(" "),
     wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly ProfileEntry[] =>
-      parseObjectArray<ProfileEntry>(
-        "characterProfiles",
-        raw,
-        { identity: "name", secondary: "profile" },
-        (name, profile) => ({ name, profile }),
-        (name) => ({ name, profile: "" }),
-      ),
-    fake: () => [],
+    validate: validateCharacterProfiles,
+    fake: fakeCharacterProfiles,
   },
-  locationProfiles: {
-    key: "locationProfiles",
-    wireKey: "location_profiles",
+  locations: {
+    key: "locations",
+    wireKey: "locations",
     instruction:
-      "location_profiles: per-location profile distillations drawn from canon. Value: an array of {name, profile} objects.",
+      "locations: per-location bible entries drawn from canon. Value: an array of {name, description, significance, charactersSeen} objects where charactersSeen is an array of {character, firstCoOccurrenceOrdinal} listing every canon-established character who appears at the location, with the chapter ordinal of their first co-occurrence.",
     wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly ProfileEntry[] =>
-      parseObjectArray<ProfileEntry>(
-        "locationProfiles",
-        raw,
-        { identity: "name", secondary: "profile" },
-        (name, profile) => ({ name, profile }),
-        (name) => ({ name, profile: "" }),
-      ),
+    validate: (raw): readonly LocationProfile[] => parseLocations(raw),
     fake: () => [],
   },
   threadRollups: {
@@ -345,10 +408,10 @@ const REGISTRY = {
           return { thread, status, rollup };
         },
       );
-      assertThreadRollupsGrounded(rollups, canon);
+      assertThreadRollupsGrounded(rollups, canon.facts);
       return rollups;
     },
-    fake: (input) => fakeThreadRollups(input),
+    fake: (canon) => fakeThreadRollups(canon),
   },
   groups: {
     key: "groups",
@@ -453,18 +516,56 @@ const REGISTRY = {
     key: "worldTimeline",
     wireKey: "world_timeline",
     instruction:
-      "world_timeline: in-world events in established order, independent of the book's telling. Value: an array of strings.",
-    wireSchema: { type: "array", items: { type: "string" } },
-    validate: (raw): readonly string[] => parseStringArray("worldTimeline", raw),
+      "world_timeline: in-world events in established chronological order, independent of the book's telling. Value: an array of {event, grounding} objects where grounding is one of stated, inferred.",
+    wireSchema: { type: "array", items: { type: "object" } },
+    validate: (raw): readonly WorldTimelineEvent[] => {
+      if (!Array.isArray(raw)) {
+        failSection("worldTimeline", "must be an array of {event, grounding} entries", raw);
+      }
+      return raw.map((entry, index): WorldTimelineEvent => {
+        if (!isPlainObject(entry)) {
+          failSection("worldTimeline", `entry #${index} must be an object`, entry);
+        }
+        const event = entry["event"];
+        if (!nonEmptyString(event)) {
+          failSection("worldTimeline", `entry #${index} "event" must be a non-empty string`, entry);
+        }
+        const grounding = entry["grounding"];
+        if (!isTimelineGrounding(grounding)) {
+          failSection(
+            "worldTimeline",
+            `entry #${index} "grounding" must be one of ${TIMELINE_GROUNDINGS.join(", ")}`,
+            entry,
+          );
+        }
+        return { event, grounding };
+      });
+    },
     fake: () => [],
   },
   bookTimeline: {
     key: "bookTimeline",
     wireKey: "book_timeline",
     instruction:
-      "book_timeline: the book's events in narration order. Value: an array of strings.",
-    wireSchema: { type: "array", items: { type: "string" } },
-    validate: (raw): readonly string[] => parseStringArray("bookTimeline", raw),
+      "book_timeline: the book's events mapped to chapter ordinals in narration order. Value: an array of {ordinal, events} objects where ordinal is the chapter ordinal and events is an array of strings.",
+    wireSchema: { type: "array", items: { type: "object" } },
+    validate: (raw): readonly BookTimelineEntry[] => {
+      if (!Array.isArray(raw)) {
+        failSection("bookTimeline", "must be an array of {ordinal, events} entries", raw);
+      }
+      return raw.map((entry, index): BookTimelineEntry => {
+        if (!isPlainObject(entry)) {
+          failSection("bookTimeline", `entry #${index} must be an object`, entry);
+        }
+        const ordinal = entry["ordinal"];
+        if (!positiveInt(ordinal)) {
+          failSection("bookTimeline", `entry #${index} "ordinal" must be a positive integer`, entry);
+        }
+        const eventsRaw = entry["events"];
+        const events = parseStringArray(`bookTimeline[${ordinal}]events`, eventsRaw);
+        return { ordinal, events };
+      });
+    },
     fake: () => [],
   },
 } satisfies { readonly [K in ModelSectionKey]: BibleSectionSpec<K> };
@@ -491,12 +592,17 @@ function requireSectionValue(
 /**
  * Master monolithic validator: a flat payload of wireKey properties, unknown
  * top-level keys dropped, every section validated by its registered
- * validator, a missing section rejected. Canon-grounded sections also reject
- * values the given Story Facts do not support. Genuinely malformed or
- * ambiguous section values propagate the precise per-section rejection —
- * nothing silently reaches the bible.
+ * validator against the section canon, a missing section rejected.
+ * Genuinely malformed, ambiguous, or unsourced (e.g. a character profile
+ * introducing an entity canon never establishes, a world deviation no
+ * canon world rule supports, or a thread rollup contradicting the fact
+ * layer) section values propagate the precise
+ * per-section rejection — nothing silently reaches the bible. The locations
+ * section's chapter-text grounding is NOT applied here (the canon cannot see
+ * chapter texts): synthesis callers layer it via `grounded-locations.ts`
+ * (issue #17).
  */
-export function validateBible(raw: unknown, canon: StoryFacts = emptyStoryFacts()): ModelSections {
+export function validateBible(raw: unknown, canon: SectionCanon): ModelSections {
   if (!isPlainObject(raw)) {
     failSection("bible", "payload must be an object", raw);
   }
@@ -505,20 +611,26 @@ export function validateBible(raw: unknown, canon: StoryFacts = emptyStoryFacts(
       requireSectionValue(raw, BIBLE_SECTIONS.bookOverview.wireKey),
       canon,
     ),
-    world: BIBLE_SECTIONS.world.validate(requireSectionValue(raw, BIBLE_SECTIONS.world.wireKey), canon),
+    world: BIBLE_SECTIONS.world.validate(
+      requireSectionValue(raw, BIBLE_SECTIONS.world.wireKey),
+      canon,
+    ),
     characterProfiles: BIBLE_SECTIONS.characterProfiles.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.characterProfiles.wireKey),
       canon,
     ),
-    locationProfiles: BIBLE_SECTIONS.locationProfiles.validate(
-      requireSectionValue(raw, BIBLE_SECTIONS.locationProfiles.wireKey),
+    locations: BIBLE_SECTIONS.locations.validate(
+      requireSectionValue(raw, BIBLE_SECTIONS.locations.wireKey),
       canon,
     ),
     threadRollups: BIBLE_SECTIONS.threadRollups.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.threadRollups.wireKey),
       canon,
     ),
-    groups: BIBLE_SECTIONS.groups.validate(requireSectionValue(raw, BIBLE_SECTIONS.groups.wireKey), canon),
+    groups: BIBLE_SECTIONS.groups.validate(
+      requireSectionValue(raw, BIBLE_SECTIONS.groups.wireKey),
+      canon,
+    ),
     itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.itemsOfSignificance.wireKey),
       canon,
@@ -550,7 +662,7 @@ const BIBLE_PROMPT_HEADER = [
   "You are the Story Bible synthesizer distilling graded Story Facts and chapter summaries into an author-facing bible (ADR-0007: two-layer canon).",
   "Emit exactly the requested sections; every section's value must match its documented shape precisely.",
   "Every section's content must be supported by the Story Facts as of the current ordinal — never invent plot events, threads, or status changes.",
-  "An empty array (or empty overview) is valid whenever the canon establishes nothing for that section.",
+  "An empty array (or empty overview) is valid whenever the canon establishes nothing for that section — never invent content.",
 ].join(" ");
 
 /** The master synthesis prompt: header plus every registered section block. */
@@ -561,27 +673,26 @@ export function bibleMasterPrompt(): string {
   ].join("\n");
 }
 
-const EMPTY_BIBLE_CONTEXT: BibleSynthesisContext = { facts: emptyStoryFacts(), summaries: [] };
-
 /**
- * Deterministic fake dispatch across every registered section fake. The
- * default context is an empty canon, so the overview and thread-rollup fakes
- * ship their valid empty placeholders; pass the synthesis context to get the
- * canon-grounded prose baselines (issue #19).
+ * Deterministic fake dispatch across every registered section fake, seen
+ * through the section canon: sections the canon establishes nothing for
+ * ship valid empty placeholders; grounded sections populate (issue #15:
+ * character profiles; issue #16: the world, which derives even from bare
+ * canon; issue #19: the overview and thread rollups).
  */
-export function fakeModelSections(input: BibleSynthesisContext = EMPTY_BIBLE_CONTEXT): ModelSections {
+export function fakeModelSections(canon: SectionCanon): ModelSections {
   return {
-    bookOverview: BIBLE_SECTIONS.bookOverview.fake(input),
-    world: BIBLE_SECTIONS.world.fake(input),
-    characterProfiles: BIBLE_SECTIONS.characterProfiles.fake(input),
-    locationProfiles: BIBLE_SECTIONS.locationProfiles.fake(input),
-    threadRollups: BIBLE_SECTIONS.threadRollups.fake(input),
-    groups: BIBLE_SECTIONS.groups.fake(input),
-    itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.fake(input),
-    lexiconNotes: BIBLE_SECTIONS.lexiconNotes.fake(input),
-    openLoops: BIBLE_SECTIONS.openLoops.fake(input),
-    styleRollup: BIBLE_SECTIONS.styleRollup.fake(input),
-    worldTimeline: BIBLE_SECTIONS.worldTimeline.fake(input),
-    bookTimeline: BIBLE_SECTIONS.bookTimeline.fake(input),
+    bookOverview: BIBLE_SECTIONS.bookOverview.fake(canon),
+    world: BIBLE_SECTIONS.world.fake(canon),
+    characterProfiles: BIBLE_SECTIONS.characterProfiles.fake(canon),
+    locations: BIBLE_SECTIONS.locations.fake(canon),
+    threadRollups: BIBLE_SECTIONS.threadRollups.fake(canon),
+    groups: BIBLE_SECTIONS.groups.fake(canon),
+    itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.fake(canon),
+    lexiconNotes: BIBLE_SECTIONS.lexiconNotes.fake(canon),
+    openLoops: BIBLE_SECTIONS.openLoops.fake(canon),
+    styleRollup: BIBLE_SECTIONS.styleRollup.fake(canon),
+    worldTimeline: BIBLE_SECTIONS.worldTimeline.fake(canon),
+    bookTimeline: BIBLE_SECTIONS.bookTimeline.fake(canon),
   };
 }
