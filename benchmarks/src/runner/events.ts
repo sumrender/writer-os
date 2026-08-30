@@ -12,9 +12,18 @@ import type { Stats } from "../lib/metrics.js";
 import type {
   BibleSnapshot,
   ChapterSummaryEntry,
+  CharacterProfile,
+  CharacterRelationship,
   GraphData,
+  LocationCharacterSeen,
+  LocationProfile,
   StoryBible,
+  WorldClassification,
+  WorldRule,
+  WorldRuleRelation,
+  WorldSection,
 } from "../lib/story-bible.js";
+import { WORLD_CLASSIFICATIONS, WORLD_RULE_RELATIONS } from "../lib/story-bible.js";
 import { SYNTHESIS_STRATEGIES, type SynthesisStrategy } from "../lib/pipeline.js";
 import { isPlainObject, nonEmptyString, positiveInt } from "../lib/schema-primitives.js";
 import type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extraction-axis.js";
@@ -26,6 +35,7 @@ import type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extra
  */
 export { ENTITY_KINDS } from "../lib/story-facts.js";
 export { SYNTHESIS_STRATEGIES } from "../lib/pipeline.js";
+export { WORLD_CLASSIFICATIONS, WORLD_RULE_RELATIONS } from "../lib/story-bible.js";
 export { isPlainObject, nonEmptyString, positiveInt } from "../lib/schema-primitives.js";
 export { AXES, JUDGES, PIPELINES } from "./types.js";
 export type { Axis, JudgeKind, PipelineKind } from "./types.js";
@@ -40,9 +50,17 @@ export type {
   ModelSectionKey,
   BibleSnapshot,
   ChapterSummaryEntry,
+  CharacterProfile,
+  CharacterRelationship,
   GraphData,
   GraphNode,
   GraphEdge,
+  LocationProfile,
+  LocationCharacterSeen,
+  WorldClassification,
+  WorldRule,
+  WorldRuleRelation,
+  WorldSection,
 } from "../lib/story-bible.js";
 export type { SynthesisStrategy } from "../lib/pipeline.js";
 export type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extraction-axis.js";
@@ -321,16 +339,86 @@ const parseChapterSummary: Parser<ChapterSummaryEntry> = recordWith((r) => {
   return ordinal !== null && summary !== null ? { ordinal, summary } : null;
 });
 
-const parseWorldNote: Parser<StoryBible["world"][number]> = recordWith((r) => {
-  const topic = required(r, "topic", parseNonEmptyString);
+const parseWorldClassification: Parser<WorldClassification> = oneOf(WORLD_CLASSIFICATIONS);
+const parseWorldRuleRelation: Parser<WorldRuleRelation> = oneOf(WORLD_RULE_RELATIONS);
+
+const parseWorldRuleEntry: Parser<WorldRule> = recordWith((r) => {
+  const rule = required(r, "rule", parseNonEmptyString);
+  const relation = required(r, "relation", parseWorldRuleRelation);
   const note = required(r, "note", parseString);
-  return topic !== null && note !== null ? { topic, note } : null;
+  return rule !== null && relation !== null && note !== null ? { rule, relation, note } : null;
 });
 
-const parseProfile: Parser<StoryBible["characterProfiles"][number]> = recordWith((r) => {
+const parseWorldSection: Parser<WorldSection> = recordWith((r) => {
+  const classification = required(r, "classification", parseWorldClassification);
+  const description = required(r, "description", parseString);
+  const rules = required(r, "rules", (v) => parseArray(v, parseWorldRuleEntry));
+  return classification !== null && description !== null && rules !== null
+    ? { classification, description, rules }
+    : null;
+});
+
+const parseCharacterRelationship: Parser<CharacterRelationship> = recordWith((r) => {
+  const other = required(r, "other", parseNonEmptyString);
+  const summary = required(r, "summary", parseNonEmptyString);
+  return other !== null && summary !== null ? { other, summary } : null;
+});
+
+/** The rich character profile (issue #15), field-strict: nothing optional. */
+const parseCharacterProfile: Parser<CharacterProfile> = recordWith((r) => {
   const name = required(r, "name", parseNonEmptyString);
-  const profile = required(r, "profile", parseString);
-  return name !== null && profile !== null ? { name, profile } : null;
+  const appearance = required(r, "appearance", parseString);
+  const personality = required(r, "personality", parseString);
+  const definingTraits = required(r, "definingTraits", (v) => parseArray(v, parseNonEmptyString));
+  const background = required(r, "background", parseString);
+  const arc = required(r, "arc", parseString);
+  const firstAppearanceOrdinal = required(r, "firstAppearanceOrdinal", parsePositiveInt);
+  const mentionOrdinals = required(r, "mentionOrdinals", (v) => parseArray(v, parsePositiveInt));
+  const relationships = required(r, "relationships", (v) =>
+    parseArray(v, parseCharacterRelationship),
+  );
+  return name !== null &&
+    appearance !== null &&
+    personality !== null &&
+    definingTraits !== null &&
+    background !== null &&
+    arc !== null &&
+    firstAppearanceOrdinal !== null &&
+    mentionOrdinals !== null &&
+    relationships !== null
+    ? {
+        name,
+        appearance,
+        personality,
+        definingTraits,
+        background,
+        arc,
+        firstAppearanceOrdinal,
+        mentionOrdinals,
+        relationships,
+      }
+    : null;
+});
+
+const parseLocationCharacterSeen: Parser<LocationCharacterSeen> = recordWith((r) => {
+  const character = required(r, "character", parseNonEmptyString);
+  const firstCoOccurrenceOrdinal = required(r, "firstCoOccurrenceOrdinal", parsePositiveInt);
+  return character !== null && firstCoOccurrenceOrdinal !== null
+    ? { character, firstCoOccurrenceOrdinal }
+    : null;
+});
+
+/** The location profile (issue #17), field-strict: nothing optional. */
+const parseLocationProfile: Parser<LocationProfile> = recordWith((r) => {
+  const name = required(r, "name", parseNonEmptyString);
+  const description = required(r, "description", parseString);
+  const significance = required(r, "significance", parseString);
+  const charactersSeen = required(r, "charactersSeen", (v) =>
+    parseArray(v, parseLocationCharacterSeen),
+  );
+  return name !== null && description !== null && significance !== null && charactersSeen !== null
+    ? { name, description, significance, charactersSeen }
+    : null;
 });
 
 const parseThreadRollup: Parser<StoryBible["threadRollups"][number]> = recordWith((r) => {
@@ -398,9 +486,11 @@ const parseBookTimelineEntry: Parser<StoryBible["bookTimeline"][number]> = recor
 
 const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
   const bookOverview = required(r, "bookOverview", parseString);
-  const world = required(r, "world", (v) => parseArray(v, parseWorldNote));
-  const characterProfiles = required(r, "characterProfiles", (v) => parseArray(v, parseProfile));
-  const locationProfiles = required(r, "locationProfiles", (v) => parseArray(v, parseProfile));
+  const world = required(r, "world", parseWorldSection);
+  const characterProfiles = required(r, "characterProfiles", (v) =>
+    parseArray(v, parseCharacterProfile),
+  );
+  const locations = required(r, "locations", (v) => parseArray(v, parseLocationProfile));
   const threadRollups = required(r, "threadRollups", (v) => parseArray(v, parseThreadRollup));
   const groups = required(r, "groups", (v) => parseArray(v, parseNamedDescription));
   const itemsOfSignificance = required(r, "itemsOfSignificance", (v) =>
@@ -417,7 +507,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
     bookOverview === null ||
     world === null ||
     characterProfiles === null ||
-    locationProfiles === null ||
+    locations === null ||
     threadRollups === null ||
     groups === null ||
     itemsOfSignificance === null ||
@@ -435,7 +525,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
     bookOverview,
     world,
     characterProfiles,
-    locationProfiles,
+    locations,
     threadRollups,
     groups,
     itemsOfSignificance,

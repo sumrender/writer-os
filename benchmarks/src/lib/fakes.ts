@@ -18,6 +18,7 @@ import { applyFact, type ExtractedFact } from "./fact-merge.js";
 import { storyFacts } from "./fact-text.js";
 import { fakeModelSections } from "./bible-sections.js";
 import { deriveGraphData } from "./bible-graph.js";
+import { deriveLocationProfiles, type DeriveLocationProfiles } from "./bible-locations.js";
 
 /**
  * Rule-based deterministic pipeline fakes. The mini-book fixture
@@ -235,14 +236,16 @@ export const fakeSynthesizeChapterSummary: SynthesizeChapterSummary = async ({
   return { ordinal, summary };
 };
 
-export const fakeSynthesizeBible: SynthesizeBible = async ({ chapters, facts, summaries }) => {
-  const sections = {
-    ...fakeModelSections(),
-    worldTimeline: buildFakeWorldTimeline(facts),
-    bookTimeline: buildFakeBookTimeline(chapters),
-  };
-  return storyBibleFromSections(sections, summaries, deriveGraphData({ facts, chapterTexts: chapters }));
-};
+/**
+ * Options for the deterministic fake bible synthesizer. `deriveLocations`
+ * defaults to the production derivation so the fake matches the real
+ * synthesizer's contract by default; tests that want the registry-uniform
+ * placeholder behavior (every section is `BIBLE_SECTIONS.x.fake(canon)`)
+ * inject a deriver that returns `[]`.
+ */
+export interface FakeSynthesizeBibleOptions {
+  readonly deriveLocations?: DeriveLocationProfiles;
+}
 
 /**
  * Build the world timeline from the story facts. All events in the fake
@@ -273,3 +276,37 @@ function buildFakeBookTimeline(chapters: readonly string[]): readonly BookTimeli
   }
   return entries;
 }
+
+/**
+ * Deterministic fake bible synthesizer: seeds every model section via the
+ * registry's canon-seen `fake()`, replaces `locations` with the grounding
+ * derivation, and populates the timelines (issue #18) from the facts and
+ * chapter texts — the registry fakes ship valid empty placeholders. Mirrors
+ * the real synthesizer's contract — both always ground their locations when
+ * the canon establishes places (Liskov: same inputs → same shape).
+ */
+export function createFakeSynthesizeBible(
+  options: FakeSynthesizeBibleOptions = {},
+): SynthesizeBible {
+  const deriveLocations = options.deriveLocations ?? deriveLocationProfiles;
+  return async ({ chapters, facts, summaries }) => {
+    const sections = fakeModelSections({ facts, chapterSummaries: summaries });
+    return storyBibleFromSections(
+      {
+        ...sections,
+        locations: deriveLocations({ facts, chapterTexts: chapters }),
+        worldTimeline: buildFakeWorldTimeline(facts),
+        bookTimeline: buildFakeBookTimeline(chapters),
+      },
+      summaries,
+      deriveGraphData({ facts, chapterTexts: chapters }),
+    );
+  };
+}
+
+/**
+ * Default-configured deterministic fake bible synthesizer. Mirrors the
+ * production synthesizer's contract: every section is registry-faked through
+ * the section canon and `locations` is grounded via `deriveLocationProfiles`.
+ */
+export const fakeSynthesizeBible: SynthesizeBible = createFakeSynthesizeBible();

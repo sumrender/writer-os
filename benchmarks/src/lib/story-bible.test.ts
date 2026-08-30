@@ -6,7 +6,13 @@ import {
   fakeModelSections,
   validateBible,
 } from "./bible-sections.js";
-import { emptyStoryBible, storyBibleFromSections } from "./story-bible.js";
+import {
+  emptyStoryBible,
+  emptyWorldSection,
+  storyBibleFromSections,
+  type SectionCanon,
+} from "./story-bible.js";
+import { emptyStoryFacts } from "./story-facts.js";
 
 /**
  * Composition machinery for Story Bible synthesis (issue #14): the section
@@ -16,13 +22,60 @@ import { emptyStoryBible, storyBibleFromSections } from "./story-bible.js";
  * discipline: unknown fields dropped, missing fields rejected, recoverable
  * shapes normalized, `near:` snippets on every rejection, and genuinely
  * ambiguous payloads hard-failing — nothing silently reaches the bible.
+ * Since issue #15 every validator and fake also grounds against the section
+ * canon (facts + summaries), so the tests validate against a canon too.
  */
+
+/** Canon backing {@link VALID_PAYLOAD}: one deviating world rule and the
+ * characters its character profiles are grounded in. */
+const CANON: SectionCanon = {
+  facts: {
+    ...emptyStoryFacts(),
+    characters: [{ name: "Mara Vey" }],
+    relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
+    worldRules: [{ topic: "the northern light burns without oil" }],
+  },
+  chapterSummaries: [{ ordinal: 1, summary: "Mara Vey keeps the light; Joren Vey visits." }],
+};
+
+const EMPTY_CANON: SectionCanon = { facts: emptyStoryFacts(), chapterSummaries: [] };
 
 const VALID_PAYLOAD = {
   book_overview: "A keeper's tale of light and ledgers.",
-  world: [{ topic: "the northern light", note: "burns without oil" }],
-  character_profiles: [{ name: "Mara Vey", profile: "Keeper of the light." }],
-  location_profiles: [{ name: "the northern light", profile: "A lighthouse." }],
+  world: {
+    classification: "hybrid",
+    description: "A harbor town where one canon rule deviates from the real world.",
+    rules: [
+      {
+        rule: "the northern light burns without oil",
+        relation: "deviates_from_earth",
+        note: "Real lamps need oil; the canon light does not.",
+      },
+    ],
+  },
+  character_profiles: [
+    {
+      name: "Mara Vey",
+      appearance: "her coat: salt-white wool.",
+      personality: "steady, watchful",
+      definingTraits: ["keeper's resolve"],
+      background: "raised in the light",
+      arc: "keeper's daughter to keeper",
+      firstAppearanceOrdinal: 1,
+      mentionOrdinals: [1],
+      relationships: [
+        { other: "Joren Vey", summary: "Mara Vey is the daughter of Joren Vey." },
+      ],
+    },
+  ],
+  locations: [
+    {
+      name: "the northern light",
+      description: "A lighthouse.",
+      significance: "Anchors the keeper's daily round.",
+      charactersSeen: [],
+    },
+  ],
   thread_rollups: [
     { thread: "the missing ledger", status: "resolved", rollup: "Found and burned." },
   ],
@@ -56,19 +109,40 @@ describe("section registry", () => {
       expect(BIBLE_SECTIONS[key].instruction).not.toBe("");
     }
     expect(MODEL_SECTION_KEYS).toContain("bookOverview");
-    expect(MODEL_SECTION_KEYS).toContain("locationProfiles");
+    expect(MODEL_SECTION_KEYS).toContain("locations");
   });
 
-  it("ships valid empty placeholders as every section's fake", () => {
-    const { chapterSummaries: _carried, graph: _derived, ...sections } = emptyStoryBible();
-    expect(fakeModelSections()).toEqual(sections);
+  it("ships valid empty placeholders per section, World deriving from the canon", () => {
+    const { chapterSummaries: _carried, graph: _derived, ...empty } = emptyStoryBible();
+    const sections = fakeModelSections(EMPTY_CANON);
+    expect({ ...sections, world: emptyWorldSection() }).toEqual(empty);
+    // The world fake is canon-derived, never an inert placeholder.
+    expect(sections.world.classification).toBe("earth");
+    expect(sections.world.rules.length).toBeGreaterThan(0);
   });
 
-  it("marks bookOverview a string section and the other sections arrays of the right item shape", () => {
+  it("populates character profiles from a canon that establishes characters", () => {
+    const sections = fakeModelSections(CANON);
+    expect(sections.characterProfiles.map((p) => p.name)).toEqual(["Mara Vey"]);
+    expect(sections.characterProfiles[0]?.mentionOrdinals).toEqual([1]);
+    // Every other section the canon establishes nothing for stays empty.
+    expect(sections.locations).toEqual([]);
+  });
+
+  it("marks bookOverview a string section, World an object section, the rest arrays", () => {
     for (const key of MODEL_SECTION_KEYS) {
       const schema = BIBLE_SECTIONS[key].wireSchema;
       if (key === "bookOverview") {
         expect(schema).toEqual({ type: "string" });
+      } else if (key === "world") {
+        if (schema.type !== "object") {
+          throw new Error("world wire schema must be an object section");
+        }
+        expect(Object.keys(schema.properties ?? {})).toEqual([
+          "classification",
+          "description",
+          "rules",
+        ]);
       } else {
         expect(schema).toEqual({ type: "array", items: { type: "object" } });
       }
@@ -91,7 +165,7 @@ describe("per-section trust boundary (via the registry validators)", () => {
   it("validates each section of a well-formed payload", () => {
     for (const key of MODEL_SECTION_KEYS) {
       const wireValue = VALID_PAYLOAD[BIBLE_SECTIONS[key].wireKey as keyof typeof VALID_PAYLOAD];
-      const validated = BIBLE_SECTIONS[key].validate(wireValue);
+      const validated = BIBLE_SECTIONS[key].validate(wireValue, CANON);
       if (key === "bookOverview") {
         expect(validated).toEqual(VALID_PAYLOAD.book_overview);
       } else {
@@ -101,96 +175,98 @@ describe("per-section trust boundary (via the registry validators)", () => {
   });
 
   it("normalizes bare-string entries into recoverable {identity, secondary} shapes", () => {
-    expect(BIBLE_SECTIONS.characterProfiles.validate( ["Mara Vey"])).toEqual([
-      { name: "Mara Vey", profile: "" },
+    expect(BIBLE_SECTIONS.lexiconNotes.validate(["Vess"], CANON)).toEqual([
+      { term: "Vess", note: "" },
     ]);
-    expect(BIBLE_SECTIONS.world.validate( ["the northern light burns without oil"])).toEqual([
-      { topic: "the northern light burns without oil", note: "" },
-    ]);
-    expect(BIBLE_SECTIONS.lexiconNotes.validate( ["Vess"])).toEqual([{ term: "Vess", note: "" }]);
-    expect(BIBLE_SECTIONS.styleRollup.validate( ["narration"])).toEqual([
+    expect(BIBLE_SECTIONS.styleRollup.validate(["narration"], CANON)).toEqual([
       { field: "narration", value: "" },
     ]);
   });
 
+  it("rejects bare strings for character profiles — the rich shape is not recoverable", () => {
+    expect(() => BIBLE_SECTIONS.characterProfiles.validate(["Mara Vey"], CANON)).toThrow(
+      /characterProfiles: entry #0 must be an object with a non-empty "name"/,
+    );
+  });
+
   it("drops unknown fields on entries but keeps the canonical shape", () => {
     expect(
-      BIBLE_SECTIONS.groups.validate( [{ name: "Keepers", description: "The guild.", color: "red" }]),
+      BIBLE_SECTIONS.groups.validate([{ name: "Keepers", description: "The guild.", color: "red" }], CANON),
     ).toEqual([{ name: "Keepers", description: "The guild." }]);
   });
 
   it("tolerates an explicit null secondary field as the empty string", () => {
-    expect(BIBLE_SECTIONS.locationProfiles.validate( [{ name: "the light", profile: null }])).toEqual([
-      { name: "the light", profile: "" },
+    expect(BIBLE_SECTIONS.groups.validate([{ name: "Keepers", description: null }], CANON)).toEqual([
+      { name: "Keepers", description: "" },
     ]);
   });
 
   it("rejects entries missing their identity field", () => {
-    expect(() => BIBLE_SECTIONS.groups.validate( [{ description: "no name" }])).toThrow(
+    expect(() => BIBLE_SECTIONS.groups.validate([{ description: "no name" }], CANON)).toThrow(
       /"name" must be a non-empty string/,
     );
-    expect(() => BIBLE_SECTIONS.characterProfiles.validate( [{ profile: "no name" }])).toThrow(
+    expect(() => BIBLE_SECTIONS.characterProfiles.validate([{ profile: "no name" }], CANON)).toThrow(
       /"name" must be a non-empty string/,
     );
   });
 
   it("rejects thread rollups with a missing or invalid status, including bare strings", () => {
     expect(() =>
-      BIBLE_SECTIONS.threadRollups.validate( [{ thread: "the ledger", rollup: "done" }]),
+      BIBLE_SECTIONS.threadRollups.validate([{ thread: "the ledger", rollup: "done" }], CANON),
     ).toThrow(/"status" must be one of open, resolved, dormant/);
     expect(() =>
-      BIBLE_SECTIONS.threadRollups.validate( [{ thread: "the ledger", status: "cancelled" }]),
+      BIBLE_SECTIONS.threadRollups.validate([{ thread: "the ledger", status: "cancelled" }], CANON),
     ).toThrow(/"status" must be one of open, resolved, dormant/);
     // A bare string cannot recover the required status — ambiguous, hard fail.
-    expect(() => BIBLE_SECTIONS.threadRollups.validate( ["the ledger"])).toThrow(
+    expect(() => BIBLE_SECTIONS.threadRollups.validate(["the ledger"], CANON)).toThrow(
       /threadRollups: entry #0 must be an object with a non-empty "thread"/,
     );
   });
 
   it("rejects open loops without a positive openedAtOrdinal", () => {
     expect(() =>
-      BIBLE_SECTIONS.openLoops.validate( [{ description: "Who burned it?" }]),
+      BIBLE_SECTIONS.openLoops.validate([{ description: "Who burned it?" }], CANON),
     ).toThrow(/"openedAtOrdinal" must be a positive integer/);
     expect(() =>
-      BIBLE_SECTIONS.openLoops.validate( [{ description: "Who burned it?", openedAtOrdinal: 0 }]),
+      BIBLE_SECTIONS.openLoops.validate([{ description: "Who burned it?", openedAtOrdinal: 0 }], CANON),
     ).toThrow(/"openedAtOrdinal" must be a positive integer/);
   });
 
   it("rejects worldTimeline with non-object entries and invalid grounding", () => {
-    expect(() => BIBLE_SECTIONS.worldTimeline.validate(["fine"])).toThrow(
+    expect(() => BIBLE_SECTIONS.worldTimeline.validate(["fine"], CANON)).toThrow(
       /worldTimeline: entry #0 must be an object/,
     );
     expect(() =>
-      BIBLE_SECTIONS.worldTimeline.validate([{ event: "the light was lit" }]),
+      BIBLE_SECTIONS.worldTimeline.validate([{ event: "the light was lit" }], CANON),
     ).toThrow(/"grounding" must be one of stated, inferred/);
     expect(() =>
-      BIBLE_SECTIONS.worldTimeline.validate([{ event: "", grounding: "stated" }]),
+      BIBLE_SECTIONS.worldTimeline.validate([{ event: "", grounding: "stated" }], CANON),
     ).toThrow(/"event" must be a non-empty string/);
   });
 
   it("rejects bookTimeline with non-object entries and missing ordinal", () => {
-    expect(() => BIBLE_SECTIONS.bookTimeline.validate("not an array")).toThrow(
+    expect(() => BIBLE_SECTIONS.bookTimeline.validate("not an array", CANON)).toThrow(
       /bookTimeline: must be an array of \{ordinal, events\} entries/,
     );
-    expect(() => BIBLE_SECTIONS.bookTimeline.validate([{ events: ["x"] }])).toThrow(
+    expect(() => BIBLE_SECTIONS.bookTimeline.validate([{ events: ["x"] }], CANON)).toThrow(
       /"ordinal" must be a positive integer/,
     );
-    expect(() => BIBLE_SECTIONS.bookTimeline.validate([{ ordinal: 1, events: [3] }])).toThrow(
-      /bookTimeline\[1\]events: entry #0 must be a non-empty string/,
-    );
+    expect(() =>
+      BIBLE_SECTIONS.bookTimeline.validate([{ ordinal: 1, events: [3] }], CANON),
+    ).toThrow(/bookTimeline\[1\]events: entry #0 must be a non-empty string/);
   });
 
   it("hard-fails a string section receiving a non-string value", () => {
-    expect(() => BIBLE_SECTIONS.bookOverview.validate( ["an", "array"])).toThrow(
+    expect(() => BIBLE_SECTIONS.bookOverview.validate(["an", "array"], CANON)).toThrow(
       /bookOverview: must be a string/,
     );
-    expect(() => BIBLE_SECTIONS.bookOverview.validate( 42)).toThrow(/bookOverview: must be a string/);
+    expect(() => BIBLE_SECTIONS.bookOverview.validate(42, CANON)).toThrow(/bookOverview: must be a string/);
   });
 
   it("attaches a truncated near: snippet to every rejection", () => {
     const junk = { description: "x".repeat(400) };
     try {
-      BIBLE_SECTIONS.itemsOfSignificance.validate( [junk, { name: "fine item" }]);
+      BIBLE_SECTIONS.itemsOfSignificance.validate([junk, { name: "fine item" }], CANON);
       expect.unreachable("expected a rejection");
     } catch (error) {
       const snippet = nearSnippet(error);
@@ -202,12 +278,12 @@ describe("per-section trust boundary (via the registry validators)", () => {
 
 describe("validateBible — monolithic trust boundary", () => {
   it("validates a flat wireKey payload into the twelve model sections", () => {
-    const sections = validateBible(VALID_PAYLOAD);
+    const sections = validateBible(VALID_PAYLOAD, CANON);
     expect(sections).toEqual({
       bookOverview: VALID_PAYLOAD.book_overview,
       world: VALID_PAYLOAD.world,
       characterProfiles: VALID_PAYLOAD.character_profiles,
-      locationProfiles: VALID_PAYLOAD.location_profiles,
+      locations: VALID_PAYLOAD.locations,
       threadRollups: VALID_PAYLOAD.thread_rollups,
       groups: VALID_PAYLOAD.groups,
       itemsOfSignificance: VALID_PAYLOAD.items_of_significance,
@@ -228,15 +304,15 @@ describe("validateBible — monolithic trust boundary", () => {
   });
 
   it("drops unknown top-level keys", () => {
-    const sections = validateBible({ ...VALID_PAYLOAD, sprouts: 42, bookOverview: "dup" });
+    const sections = validateBible({ ...VALID_PAYLOAD, sprouts: 42, bookOverview: "dup" }, CANON);
     expect("sprouts" in sections).toBe(false);
   });
 
   it("rejects a missing section with the payload snippet", () => {
     const { book_timeline: _missing, ...incomplete } = VALID_PAYLOAD;
-    expect(() => validateBible(incomplete)).toThrow(/missing section "book_timeline"/);
+    expect(() => validateBible(incomplete, CANON)).toThrow(/missing section "book_timeline"/);
     try {
-      validateBible(incomplete);
+      validateBible(incomplete, CANON);
       expect.unreachable("expected a rejection");
     } catch (error) {
       expect(nearSnippet(error)).toContain('"book_overview"');
@@ -244,13 +320,27 @@ describe("validateBible — monolithic trust boundary", () => {
   });
 
   it("rejects a non-object payload", () => {
-    expect(() => validateBible("the whole bible")).toThrow(/bible: payload must be an object/);
-    expect(() => validateBible(null)).toThrow(/bible: payload must be an object/);
+    expect(() => validateBible("the whole bible", CANON)).toThrow(/bible: payload must be an object/);
+    expect(() => validateBible(null, CANON)).toThrow(/bible: payload must be an object/);
   });
 
   it("rejects a payload whose section value fails its own validator", () => {
     expect(() =>
-      validateBible({ ...VALID_PAYLOAD, groups: [{ description: "no name" }] }),
+      validateBible({ ...VALID_PAYLOAD, groups: [{ description: "no name" }] }, CANON),
     ).toThrow(/groups: entry #0 "name" must be a non-empty string/);
+  });
+
+  it("rejects character profiles that introduce unsourced entities (canon-grounded)", () => {
+    expect(() =>
+      validateBible(
+        {
+          ...VALID_PAYLOAD,
+          character_profiles: [
+            { ...VALID_PAYLOAD.character_profiles[0], name: "Bellin the harbormaster" },
+          ],
+        },
+        CANON,
+      ),
+    ).toThrow(/introduces unsourced character "Bellin the harbormaster"/);
   });
 });

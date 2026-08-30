@@ -154,17 +154,104 @@ describe("mini-book fixture", () => {
     expect(bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
     const finalBible = bibleSnapshots.at(-1)?.bible;
     expect(finalBible?.chapterSummaries).toEqual(summaries);
-    // Placeholders: every model section ships valid and empty except timelines.
+    // The hand-authored section slices synthesize per ordinal. Character
+    // profiles (issue #15), grounded in facts and whole-name summary scans:
+    // Mara — appearance + trait from ch1's appearance fact; mentions ch1
+    // (named), ch2 (holds the compass), ch4 (father summary); both
+    // relationships.
+    expect(finalBible?.characterProfiles).toEqual([
+      {
+        name: "Mara Vey",
+        appearance: "her coat: salt-white wool.",
+        personality: "",
+        definingTraits: ["her coat"],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 1,
+        mentionOrdinals: [1, 2, 4],
+        relationships: [
+          { other: "Joren Vey", summary: "Mara Vey is the daughter of Joren Vey." },
+          { other: "Joren Vey", summary: "Joren Vey is the father of Mara Vey." },
+        ],
+      },
+      {
+        name: "Joren Vey",
+        appearance: "",
+        personality: "",
+        definingTraits: [],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 1,
+        mentionOrdinals: [1, 4],
+        relationships: [
+          { other: "Mara Vey", summary: "Mara Vey is the daughter of Joren Vey." },
+          { other: "Mara Vey", summary: "Joren Vey is the father of Mara Vey." },
+        ],
+      },
+    ]);
+    // Mention lists grow per ordinal: as of chapter 1 both are only ch1.
+    expect(bibleSnapshots[0]?.bible.characterProfiles.map((p) => p.mentionOrdinals)).toEqual([
+      [1],
+      [1],
+    ]);
+    expect(bibleSnapshots[0]?.bible.characterProfiles.map((p) => p.name)).toEqual([
+      "Mara Vey",
+      "Joren Vey",
+    ]);
+    // Prose aspects canon establishes nothing for stay empty placeholders.
     expect(finalBible?.bookOverview).toBe("");
-    expect(finalBible?.characterProfiles).toEqual([]);
-    expect(finalBible?.locationProfiles).toEqual([]);
-
-    // World timeline: all events are stated (directly from prose), in narration order.
+    // Locations are derived from location facts + chapter texts (issue #17).
+    const expectedLocations = [
+      {
+        name: "the northern light",
+        description: "",
+        significance: "",
+        charactersSeen: [
+          { character: "Mara Vey", firstCoOccurrenceOrdinal: 1 },
+          { character: "Joren Vey", firstCoOccurrenceOrdinal: 1 },
+        ],
+      },
+    ];
+    expect(finalBible?.locations).toEqual(expectedLocations);
+    // The locations snapshot is populated at every ordinal — ch1 already
+    // establishes both characters and the location, so ordinal 1 carries the
+    // full co-occurrence derivation. Issue #17 requires populated locations
+    // content at multiple ordinals, not just the final one.
+    const ordinal1Locations = bibleSnapshots[0]?.bible.locations;
+    expect(ordinal1Locations).toEqual(expectedLocations);
+    const ordinal2Locations = bibleSnapshots[1]?.bible.locations;
+    expect(ordinal2Locations).toEqual(expectedLocations);
+    const ordinal3Locations = bibleSnapshots[2]?.bible.locations;
+    expect(ordinal3Locations).toEqual(expectedLocations);
+    // The World slice (issue #16) derives from the canon at every ordinal:
+    // earth baseline until chapter 3 establishes a deviating rule.
+    for (const snapshot of bibleSnapshots) {
+      expect(snapshot.bible.world.classification).not.toBe("");
+      expect(snapshot.bible.world.description).not.toBe("");
+      expect(snapshot.bible.world.rules.length).toBeGreaterThan(0);
+    }
+    expect(bibleSnapshots.slice(0, 2).map((s) => s.bible.world.classification)).toEqual([
+      "earth",
+      "earth",
+    ]);
+    expect(bibleSnapshots.slice(2).map((s) => s.bible.world.classification)).toEqual([
+      "hybrid",
+      "hybrid",
+    ]);
+    expect(finalBible?.world.rules).toEqual([
+      {
+        rule: "the northern light burns without oil",
+        relation: "deviates_from_earth",
+        note: 'Canon establishes "the northern light burns without oil", which real-world (earth) rules do not allow.',
+      },
+    ]);
+    // World timeline (issue #18): all events are stated (directly from
+    // prose), in narration order.
     expect(finalBible?.worldTimeline).toEqual([
       { event: "the harbor bell rang", grounding: "stated" },
       { event: "the ledger burned", grounding: "stated" },
     ]);
-    // Book timeline: events mapped to the ordinals that reveal them.
+    // Book timeline (issue #18): events mapped to the ordinals that reveal them.
     expect(finalBible?.bookTimeline).toEqual([
       { ordinal: 1, events: ["the harbor bell rang"] },
       { ordinal: 3, events: ["the ledger burned"] },

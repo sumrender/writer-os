@@ -25,9 +25,9 @@ function factsOf(name: string): StoryFacts {
 function bibleOf(overview: string): StoryBible {
   return {
     bookOverview: overview,
-    world: [],
+    world: { classification: "earth", description: "", rules: [] },
     characterProfiles: [],
-    locationProfiles: [],
+    locations: [],
     threadRollups: [],
     groups: [],
     itemsOfSignificance: [],

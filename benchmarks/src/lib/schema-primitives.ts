@@ -19,3 +19,25 @@ export function positiveInt(value: unknown): value is number {
 
 /** Lowercase, dash-separated identifier used for every hand-authored id field. */
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const SNIPPET_MAX = 160;
+
+/** Truncated raw-payload snippet attached to every trust-boundary rejection. */
+function snippet(raw: unknown): string {
+  let text: string;
+  try {
+    text = raw === undefined ? "undefined" : (JSON.stringify(raw) ?? String(raw));
+  } catch {
+    text = String(raw);
+  }
+  return text.slice(0, SNIPPET_MAX);
+}
+
+/**
+ * The uniform rejection style for hand-authored payload validators: where it
+ * failed, why, and a `near:` raw-payload snippet for diagnosability from run
+ * logs alone.
+ */
+export function failSection(where: string, problem: string, raw: unknown): never {
+  throw new Error(`${where}: ${problem} near: ${snippet(raw)}`);
+}
