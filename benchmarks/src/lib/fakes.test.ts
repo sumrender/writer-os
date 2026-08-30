@@ -203,7 +203,7 @@ describe("fakeSynthesizeChapterSummary", () => {
 });
 
 describe("fakeSynthesizeBible", () => {
-  it("carries the summaries and derives the graph, leaving sections as empty placeholders", async () => {
+  it("carries summaries, derives the graph, and fakes the prose sections from the canon", async () => {
     const chapters = [
       "Introducing Mara Vey, keeper of the northern light.",
       "Introducing Joren Vey, once keeper before her.",
@@ -218,7 +218,12 @@ describe("fakeSynthesizeBible", () => {
 
     expect(bible.chapterSummaries).toEqual(summaries);
     const { chapterSummaries: _carried, graph, ...sections } = bible;
-    expect(sections).toEqual(fakeModelSections());
+    expect(sections).toEqual(fakeModelSections({ facts, summaries }));
+    // The canon-grounding fakes: overview populated once characters exist,
+    // and the thread rollups mirror the (empty) fact-layer threads.
+    expect(bible.bookOverview.title).toBe("Mara Vey's Tale");
+    expect(bible.bookOverview.premise).toBe("The tale of Mara Vey.");
+    expect(bible.threadRollups).toEqual([]);
     expect(graph.nodes).toEqual([
       { name: "Mara Vey", importance: 1, role: "protagonist" },
       { name: "Joren Vey", importance: 1, role: "supporting" },

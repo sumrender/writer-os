@@ -23,6 +23,15 @@ export type ThreadStatus = "open" | "resolved" | "dormant";
 
 export const THREAD_STATUSES: readonly ThreadStatus[] = ["open", "resolved", "dormant"];
 
+/**
+ * Narrows an unknown value to a {@link ThreadStatus} — the single home of this
+ * meaning (CODING_STANDARDS §2.1): the status vocabulary and its guard live
+ * here, beside the vocabulary itself.
+ */
+export function isThreadStatus(value: unknown): value is ThreadStatus {
+  return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
+}
+
 export interface CharacterEntry {
   readonly name: string;
 }

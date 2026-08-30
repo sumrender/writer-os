@@ -363,6 +363,7 @@ export function createAgnesBibleSynthesizer(
   const attemptSection = async <K extends ModelSectionKey>(
     spec: BibleSectionSpec<K>,
     user: string,
+    canon: StoryFacts,
   ): Promise<ModelSections[K]> =>
     withRetry(log, `bible section ${spec.key}`, user, BIBLE_RETRY_INSTRUCTIONS, async (prompt) => {
       const payload = parseToolObject(
@@ -378,10 +379,10 @@ export function createAgnesBibleSynthesizer(
         ),
         "section",
       );
-      return spec.validate(payload["value"]);
+      return spec.validate(payload["value"], canon);
     });
 
-  const attemptMonolithic = async (user: string): Promise<ModelSections> =>
+  const attemptMonolithic = async (user: string, canon: StoryFacts): Promise<ModelSections> =>
     withRetry(log, "bible assembly", user, BIBLE_RETRY_INSTRUCTIONS, async (prompt) =>
       validateBible(
         parseToolObject(
@@ -397,6 +398,7 @@ export function createAgnesBibleSynthesizer(
           ),
           "bible",
         ),
+        canon,
       ),
     );
 
@@ -411,6 +413,7 @@ export function createAgnesBibleSynthesizer(
     if (strategy === "monolithic") {
       sections = await attemptMonolithic(
         bibleSynthesisUserPrompt({ ...shared, sectionsBlock: bibleMasterPrompt() }),
+        input.facts,
       );
     } else {
       const sectionPrompt = (key: ModelSectionKey): string =>
@@ -419,33 +422,50 @@ export function createAgnesBibleSynthesizer(
           sectionsBlock: BIBLE_SECTIONS[key].instruction,
         });
       sections = {
-        bookOverview: await attemptSection(BIBLE_SECTIONS.bookOverview, sectionPrompt("bookOverview")),
-        world: await attemptSection(BIBLE_SECTIONS.world, sectionPrompt("world")),
+        bookOverview: await attemptSection(
+          BIBLE_SECTIONS.bookOverview,
+          sectionPrompt("bookOverview"),
+          input.facts,
+        ),
+        world: await attemptSection(BIBLE_SECTIONS.world, sectionPrompt("world"), input.facts),
         characterProfiles: await attemptSection(
           BIBLE_SECTIONS.characterProfiles,
           sectionPrompt("characterProfiles"),
+          input.facts,
         ),
         locationProfiles: await attemptSection(
           BIBLE_SECTIONS.locationProfiles,
           sectionPrompt("locationProfiles"),
+          input.facts,
         ),
         threadRollups: await attemptSection(
           BIBLE_SECTIONS.threadRollups,
           sectionPrompt("threadRollups"),
+          input.facts,
         ),
-        groups: await attemptSection(BIBLE_SECTIONS.groups, sectionPrompt("groups")),
+        groups: await attemptSection(BIBLE_SECTIONS.groups, sectionPrompt("groups"), input.facts),
         itemsOfSignificance: await attemptSection(
           BIBLE_SECTIONS.itemsOfSignificance,
           sectionPrompt("itemsOfSignificance"),
+          input.facts,
         ),
-        lexiconNotes: await attemptSection(BIBLE_SECTIONS.lexiconNotes, sectionPrompt("lexiconNotes")),
-        openLoops: await attemptSection(BIBLE_SECTIONS.openLoops, sectionPrompt("openLoops")),
-        styleRollup: await attemptSection(BIBLE_SECTIONS.styleRollup, sectionPrompt("styleRollup")),
+        lexiconNotes: await attemptSection(
+          BIBLE_SECTIONS.lexiconNotes,
+          sectionPrompt("lexiconNotes"),
+          input.facts,
+        ),
+        openLoops: await attemptSection(BIBLE_SECTIONS.openLoops, sectionPrompt("openLoops"), input.facts),
+        styleRollup: await attemptSection(BIBLE_SECTIONS.styleRollup, sectionPrompt("styleRollup"), input.facts),
         worldTimeline: await attemptSection(
           BIBLE_SECTIONS.worldTimeline,
           sectionPrompt("worldTimeline"),
+          input.facts,
         ),
-        bookTimeline: await attemptSection(BIBLE_SECTIONS.bookTimeline, sectionPrompt("bookTimeline")),
+        bookTimeline: await attemptSection(
+          BIBLE_SECTIONS.bookTimeline,
+          sectionPrompt("bookTimeline"),
+          input.facts,
+        ),
       };
     }
 

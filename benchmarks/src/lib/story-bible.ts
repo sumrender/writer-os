@@ -1,4 +1,4 @@
-import type { ThreadStatus } from "./story-facts.js";
+import type { StoryFacts, ThreadStatus } from "./story-facts.js";
 
 /**
  * Story Bible shape (issue #14): the synthesized, author-facing document
@@ -12,6 +12,34 @@ import type { ThreadStatus } from "./story-facts.js";
 export interface WorldNote {
   readonly topic: string;
   readonly note: string;
+}
+
+/**
+ * The book-level overview (issue #19): the author-facing statement of what
+ * the book is, synthesized per ordinal. Every field is free prose grounded
+ * in the canon *as of that ordinal* — title, genre, era, setting, premise,
+ * the one-page synopsis (never a final-book spoiler at an early ordinal),
+ * and themes.
+ */
+export interface BookOverview {
+  readonly title: string;
+  readonly genre: string;
+  readonly era: string;
+  readonly setting: string;
+  readonly premise: string;
+  readonly synopsis: string;
+  readonly themes: string;
+}
+
+/**
+ * The determinism inputs the section registry's fakes consume: the graded
+ * canon and the chapter summaries through the current ordinal. Both are
+ * always available to the Synthesize port, so a deterministic fake can
+ * ground its prose in exactly what synthesis itself sees.
+ */
+export interface BibleSynthesisContext {
+  readonly facts: StoryFacts;
+  readonly summaries: readonly ChapterSummaryEntry[];
 }
 
 export interface ProfileEntry {
@@ -48,7 +76,7 @@ export interface StyleField {
 
 /** The sections the Synthesize port models and validates. */
 export interface ModelSections {
-  readonly bookOverview: string;
+  readonly bookOverview: BookOverview;
   readonly world: readonly WorldNote[];
   readonly characterProfiles: readonly ProfileEntry[];
   readonly locationProfiles: readonly ProfileEntry[];
@@ -104,9 +132,14 @@ export function emptyGraphData(): GraphData {
   return { nodes: [], edges: [] };
 }
 
+/** The valid empty overview: nothing established yet. */
+export function emptyBookOverview(): BookOverview {
+  return { title: "", genre: "", era: "", setting: "", premise: "", synopsis: "", themes: "" };
+}
+
 export function emptyStoryBible(): StoryBible {
   return {
-    bookOverview: "",
+    bookOverview: emptyBookOverview(),
     world: [],
     characterProfiles: [],
     locationProfiles: [],

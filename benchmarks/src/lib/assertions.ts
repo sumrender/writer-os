@@ -1,6 +1,7 @@
 import {
   ENTITY_KINDS,
   THREAD_STATUSES,
+  isThreadStatus,
   type EntityKind,
   type ThreadStatus,
 } from "./story-facts.js";
@@ -486,10 +487,6 @@ function buildAssertion(
       return { ...common, kind, field, value };
     }
   }
-}
-
-function isThreadStatus(value: unknown): value is ThreadStatus {
-  return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
 }
 
 function failMissing(

@@ -38,6 +38,8 @@ export type {
   StoryBible,
   ModelSections,
   ModelSectionKey,
+  BookOverview,
+  BibleSynthesisContext,
   BibleSnapshot,
   ChapterSummaryEntry,
   GraphData,
@@ -321,6 +323,25 @@ const parseChapterSummary: Parser<ChapterSummaryEntry> = recordWith((r) => {
   return ordinal !== null && summary !== null ? { ordinal, summary } : null;
 });
 
+const parseBookOverview: Parser<StoryBible["bookOverview"]> = recordWith((r) => {
+  const title = required(r, "title", parseString);
+  const genre = required(r, "genre", parseString);
+  const era = required(r, "era", parseString);
+  const setting = required(r, "setting", parseString);
+  const premise = required(r, "premise", parseString);
+  const synopsis = required(r, "synopsis", parseString);
+  const themes = required(r, "themes", parseString);
+  return title !== null &&
+    genre !== null &&
+    era !== null &&
+    setting !== null &&
+    premise !== null &&
+    synopsis !== null &&
+    themes !== null
+    ? { title, genre, era, setting, premise, synopsis, themes }
+    : null;
+});
+
 const parseWorldNote: Parser<StoryBible["world"][number]> = recordWith((r) => {
   const topic = required(r, "topic", parseNonEmptyString);
   const note = required(r, "note", parseString);
@@ -385,7 +406,7 @@ const parseGraphData: Parser<GraphData> = recordWith((r) => {
 });
 
 const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
-  const bookOverview = required(r, "bookOverview", parseString);
+  const bookOverview = required(r, "bookOverview", parseBookOverview);
   const world = required(r, "world", (v) => parseArray(v, parseWorldNote));
   const characterProfiles = required(r, "characterProfiles", (v) => parseArray(v, parseProfile));
   const locationProfiles = required(r, "locationProfiles", (v) => parseArray(v, parseProfile));

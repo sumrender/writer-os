@@ -7,7 +7,7 @@ import { validateBook } from "./lib/manifest.js";
 import { fakeExtract, fakeSynthesizeBible, fakeSynthesizeChapterSummary } from "./lib/fakes.js";
 import { runExtraction } from "./lib/extraction-run.js";
 import { emptyStoryFacts, type StoryFacts } from "./lib/story-facts.js";
-import type { BibleSnapshot } from "./lib/story-bible.js";
+import { emptyBookOverview, type BibleSnapshot } from "./lib/story-bible.js";
 
 const bookDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -15,6 +15,51 @@ const bookDir = join(
   "books",
   "mini-book",
 );
+
+describe("tom-sawyer fixture — fake runs render the prose sections cleanly (issue #19)", () => {
+  it("renders the overview and thread sections through a fake run, grounded in whatever canon establishes", async () => {
+    const bookDir = join(dirname(fileURLToPath(import.meta.url)), "..", "books", "tom-sawyer");
+    const book = validateBook(bookDir);
+    if (!book.ok) throw new Error("fixture must validate");
+
+    const snapshots = await runExtraction(book.chapters.slice(0, 4), fakeExtract);
+    const summaries: { ordinal: number; summary: string }[] = [];
+    const chapters = book.chapters
+      .slice()
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .filter((chapter) => chapter.ordinal <= 4);
+    for (const snapshot of snapshots) {
+      const chapter = chapters.find((c) => c.ordinal === snapshot.afterOrdinal);
+      if (chapter === undefined) throw new Error(`no chapter for ordinal ${snapshot.afterOrdinal}`);
+      summaries.push(
+        await fakeSynthesizeChapterSummary({
+          ordinal: chapter.ordinal,
+          text: chapter.text,
+          factsSoFar: emptyStoryFacts(),
+        }),
+      );
+    }
+    const finalSnapshot = snapshots.at(-1);
+    if (finalSnapshot === undefined) throw new Error("no snapshots");
+
+    // The rule-based fake extracts nothing from classic prose, so the canon
+    // is unestablished: the canon-grounded overview/rollup fakes render their
+    // valid empty states rather than inventing plot events (issue #19), and
+    // any status labels stay consistent with the fact layer by construction.
+    expect(finalSnapshot.facts.threads).toEqual([]);
+    for (const snapshot of snapshots) {
+      const bible = await fakeSynthesizeBible({
+        chapters: chapters
+          .filter((chapter) => chapter.ordinal <= snapshot.afterOrdinal)
+          .map((chapter) => chapter.text),
+        facts: snapshot.facts,
+        summaries: summaries.slice(0, snapshot.afterOrdinal),
+      });
+      expect(bible.bookOverview).toEqual(emptyBookOverview());
+      expect(bible.threadRollups).toEqual([]);
+    }
+  });
+});
 
 describe("mini-book fixture", () => {
   it("validates clean as a fixture book", () => {
@@ -154,10 +199,60 @@ describe("mini-book fixture", () => {
     expect(bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
     const finalBible = bibleSnapshots.at(-1)?.bible;
     expect(finalBible?.chapterSummaries).toEqual(summaries);
-    // Placeholders: every model section ships valid and empty.
-    expect(finalBible?.bookOverview).toBe("");
+    // Every model section ships valid; the overview and thread rollups are
+    // canon-grounded fakes (issue #19), the rest remain empty placeholders.
+    expect(finalBible?.bookOverview).toEqual({
+      title: "The Northern Light",
+      genre: "unstated by the canon",
+      era: "unstated by the canon",
+      setting: "the northern light",
+      premise: 'The tale of Mara Vey and the matter of "the missing ledger".',
+      synopsis:
+        'the harbor bell rang; the ledger burned. plot thread "the missing ledger" stands resolved.',
+      themes: "the northern light burns without oil",
+    });
+    expect(finalBible?.threadRollups).toEqual([
+      {
+        thread: "the missing ledger",
+        status: "resolved",
+        rollup: "Opened by chapter 2 and resolved by chapter 4.",
+      },
+    ]);
     expect(finalBible?.characterProfiles).toEqual([]);
     expect(finalBible?.locationProfiles).toEqual([]);
+
+    // Per-ordinal grounding: the synopsis reflects only the established
+    // canon at each ordinal, and the rollup statuses always equal the
+    // fact-layer thread statuses (open at 2, resolved at 4).
+    const bibleByOrdinal = Object.fromEntries(
+      bibleSnapshots.map((s) => [s.afterOrdinal, s.bible]),
+    );
+    const after1 = bibleByOrdinal[1];
+    expect(after1?.bookOverview.title).toBe("The Northern Light");
+    expect(after1?.bookOverview.premise).toBe("The tale of Mara Vey.");
+    expect(after1?.bookOverview.synopsis).toBe("the harbor bell rang.");
+    expect(after1?.bookOverview.synopsis).not.toContain("?");
+    expect(after1?.bookOverview.synopsis).not.toContain("resolved");
+    expect(after1?.threadRollups).toEqual([]);
+
+    const after2 = bibleByOrdinal[2];
+    expect(after2?.bookOverview.synopsis).toBe(
+      'the harbor bell rang. plot thread "the missing ledger" stands open.',
+    );
+    expect(after2?.threadRollups).toEqual([
+      {
+        thread: "the missing ledger",
+        status: "open",
+        rollup: "Opened by chapter 2 and still open as of chapter 2.",
+      },
+    ]);
+
+    const after3 = bibleByOrdinal[3];
+    expect(after3?.bookOverview.synopsis).toBe(
+      'the harbor bell rang; the ledger burned. plot thread "the missing ledger" stands open.',
+    );
+    expect(after3?.bookOverview.synopsis).not.toContain("resolved");
+
     // The derived graph: Mara Vey is mentioned 5 times, Joren Vey 4.
     expect(finalBible?.graph.nodes).toEqual([
       { name: "Mara Vey", importance: 5, role: "protagonist" },

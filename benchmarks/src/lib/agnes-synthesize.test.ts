@@ -50,7 +50,15 @@ const SUMMARY_INPUT = {
 };
 
 const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
-  bookOverview: "An overview.",
+  bookOverview: {
+    title: "The Brass Compass",
+    genre: "keeper's tale",
+    era: "the age of the light",
+    setting: "the light",
+    premise: "A keeper's tale.",
+    synopsis: 'plot thread "the ledger" stands open',
+    themes: "light",
+  },
   world: [{ topic: "the light", note: "burns without oil" }],
   characterProfiles: ["Bare Name"],
   locationProfiles: [{ name: "the light", profile: "A lighthouse." }],
@@ -72,7 +80,12 @@ const BIBLE_INPUT = (): {
   summaries: readonly { readonly ordinal: number; readonly summary: string }[];
 } => ({
   chapters: ["Chapter one text.", "Chapter two text."],
-  facts: emptyStoryFacts(),
+  facts: {
+    ...emptyStoryFacts(),
+    characters: [{ name: "Bare Name" }],
+    locations: [{ name: "the light" }],
+    threads: [{ thread: "the ledger", status: "open" }],
+  },
   summaries: [
     { ordinal: 1, summary: "One." },
     { ordinal: 2, summary: "Two." },
@@ -185,9 +198,13 @@ describe("createAgnesBibleSynthesizer — per-section", () => {
     }
     // Validators normalized the recoverable bare-string character profile.
     expect(bible.characterProfiles).toEqual([{ name: "Bare Name", profile: "" }]);
-    expect(bible.bookOverview).toBe("An overview.");
+    expect(bible.bookOverview).toEqual(SECTION_VALUES.bookOverview);
     expect(bible.chapterSummaries).toEqual(input.summaries);
-    expect(bible.graph).toEqual({ nodes: [], edges: [] });
+    // The graph derives from the input facts, not the model's sections.
+    expect(bible.graph).toEqual({
+      nodes: [{ name: "Bare Name", importance: 0, role: "protagonist" }],
+      edges: [],
+    });
   });
 
   it("retries a failing section inline and still assembles the bible", async () => {
@@ -227,7 +244,7 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
   it("makes exactly one assemble_bible call with the master prompt and validates the flat payload", async () => {
     const { client, requests } = scriptedClient([
       bibleResponse({
-        book_overview: "An overview.",
+        book_overview: SECTION_VALUES.bookOverview,
         world: [],
         character_profiles: [],
         location_profiles: [],
@@ -251,14 +268,14 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
     const prompt = String(requests[0]?.user);
     expect(prompt).toContain("book_overview:");
     expect(prompt).toContain("book_timeline:");
-    expect(bible.bookOverview).toBe("An overview.");
+    expect(bible.bookOverview).toEqual(SECTION_VALUES.bookOverview);
     expect(bible.chapterSummaries).toEqual(input.summaries);
   });
 
   it("hard-fails a payload missing sections — nothing silently reaches the bible", async () => {
     const { client, requests } = scriptedClient([
-      bibleResponse({ book_overview: "only one section" }),
-      bibleResponse({ book_overview: "still broken" }),
+      bibleResponse({ book_overview: SECTION_VALUES.bookOverview }),
+      bibleResponse({ book_overview: SECTION_VALUES.bookOverview }),
     ]);
     const synthesize = createAgnesBibleSynthesizer(client, { strategy: "monolithic" });
 
@@ -274,7 +291,7 @@ describe("synthesis response cache", () => {
     let calls = 0;
     const responses = [
       bibleResponse({
-        book_overview: "An overview.",
+        book_overview: SECTION_VALUES.bookOverview,
         world: [],
         character_profiles: [],
         location_profiles: [],
@@ -320,7 +337,7 @@ describe("synthesis response cache", () => {
     const client: AgnesClient = {
       model: "agnes-2.5-flash",
       async complete() {
-        return bibleResponse({ book_overview: "missing everything else" });
+        return bibleResponse({ book_overview: SECTION_VALUES.bookOverview });
       },
     };
     const synthesize = createAgnesBibleSynthesizer(client, {

@@ -24,7 +24,15 @@ function factsOf(name: string): StoryFacts {
 
 function bibleOf(overview: string): StoryBible {
   return {
-    bookOverview: overview,
+    bookOverview: {
+      title: overview,
+      genre: "",
+      era: "",
+      setting: "",
+      premise: "",
+      synopsis: "",
+      themes: "",
+    },
     world: [],
     characterProfiles: [],
     locationProfiles: [],

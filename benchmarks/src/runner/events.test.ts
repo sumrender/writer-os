@@ -397,7 +397,15 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
   };
 
   const emptyBible = {
-    bookOverview: "",
+    bookOverview: {
+      title: "",
+      genre: "",
+      era: "",
+      setting: "",
+      premise: "",
+      synopsis: "",
+      themes: "",
+    },
     world: [],
     characterProfiles: [],
     locationProfiles: [],
