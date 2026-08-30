@@ -1,11 +1,13 @@
 import type { StoryBible as StoryBibleState } from "@writer-os/benchmark/events";
+import { Characters } from "./Characters.js";
 import { SectionCard, threadTone } from "./SectionCard.js";
 
 /**
  * The Story Bible viewer shell (issue #14): every model section rendered with
  * an empty state, chapter summaries, and the derived graph as a labeled
  * placeholder — the data exists; the interactive rendering is the
- * Relationship Graph ticket's scope.
+ * Relationship Graph ticket's scope. Characters render through their own
+ * section (issue #15): cards plus a detail drawer.
  */
 
 export function StoryBible({ bible }: { bible: StoryBibleState }) {
@@ -30,15 +32,7 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
         </ul>
       </SectionCard>
 
-      <SectionCard title="Character profiles" count={bible.characterProfiles.length}>
-        <ul className="space-y-1">
-          {bible.characterProfiles.map((p) => (
-            <li key={p.name} className="text-zinc-300">
-              <span className="font-medium text-zinc-100">{p.name}</span>: {p.profile}
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
+      <Characters profiles={bible.characterProfiles} graph={bible.graph} />
 
       <SectionCard title="Location profiles" count={bible.locationProfiles.length}>
         <ul className="space-y-1">

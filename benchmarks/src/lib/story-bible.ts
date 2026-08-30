@@ -1,4 +1,4 @@
-import type { ThreadStatus } from "./story-facts.js";
+import type { StoryFacts, ThreadStatus } from "./story-facts.js";
 
 /**
  * Story Bible shape (issue #14): the synthesized, author-facing document
@@ -17,6 +17,34 @@ export interface WorldNote {
 export interface ProfileEntry {
   readonly name: string;
   readonly profile: string;
+}
+
+/** One prose-form relationship summary inside a character profile (issue #15). */
+export interface CharacterRelationship {
+  /** The other party, spelled exactly as canon establishes the name. */
+  readonly other: string;
+  /** The relationship in prose, grounded in canon relationship facts. */
+  readonly summary: string;
+}
+
+/**
+ * The rich character profile (issue #15): every aspect distilled from Story
+ * Facts and chapter summaries, never from the chapter text alone. Prose
+ * aspects canon establishes nothing about are the empty string — never
+ * invented.
+ */
+export interface CharacterProfile {
+  readonly name: string;
+  readonly appearance: string;
+  readonly personality: string;
+  readonly definingTraits: readonly string[];
+  readonly background: string;
+  readonly arc: string;
+  /** Ordinal of the first chapter that mentions the character. */
+  readonly firstAppearanceOrdinal: number;
+  /** Every ordinal whose summary mentions the character, ascending, unique. */
+  readonly mentionOrdinals: readonly number[];
+  readonly relationships: readonly CharacterRelationship[];
 }
 
 export interface ThreadRollup {
@@ -50,7 +78,7 @@ export interface StyleField {
 export interface ModelSections {
   readonly bookOverview: string;
   readonly world: readonly WorldNote[];
-  readonly characterProfiles: readonly ProfileEntry[];
+  readonly characterProfiles: readonly CharacterProfile[];
   readonly locationProfiles: readonly ProfileEntry[];
   readonly threadRollups: readonly ThreadRollup[];
   readonly groups: readonly NamedDescription[];
@@ -92,6 +120,18 @@ export interface StoryBible extends ModelSections {
   readonly chapterSummaries: readonly ChapterSummaryEntry[];
   /** Deterministic derivation from Story Facts — never modeled. */
   readonly graph: GraphData;
+}
+
+/**
+ * The canon view every model section's validator and deterministic fake sees
+ * (issue #15): Story Facts as of the synthesis ordinal plus the chapter
+ * summaries so far — the same grounding synthesis is held to. Raw chapter
+ * text is deliberately absent: profiles derive from facts and summaries,
+ * never from the chapter text alone.
+ */
+export interface SectionCanon {
+  readonly facts: StoryFacts;
+  readonly chapterSummaries: readonly ChapterSummaryEntry[];
 }
 
 /** One per-ordinal bible state, mirroring the extraction snapshot discipline. */

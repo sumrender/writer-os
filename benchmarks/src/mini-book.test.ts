@@ -154,9 +154,51 @@ describe("mini-book fixture", () => {
     expect(bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
     const finalBible = bibleSnapshots.at(-1)?.bible;
     expect(finalBible?.chapterSummaries).toEqual(summaries);
-    // Placeholders: every model section ships valid and empty.
+    // The one hand-authored section slice (issue #15): character profiles
+    // synthesize per ordinal, grounded in facts and whole-name summary scans.
+    // Mara: appearance + trait from ch1's appearance fact; mentions ch1 (named),
+    // ch2 (holds the compass), ch4 (father summary); both relationships.
+    expect(finalBible?.characterProfiles).toEqual([
+      {
+        name: "Mara Vey",
+        appearance: "her coat: salt-white wool.",
+        personality: "",
+        definingTraits: ["her coat"],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 1,
+        mentionOrdinals: [1, 2, 4],
+        relationships: [
+          { other: "Joren Vey", summary: "Mara Vey is the daughter of Joren Vey." },
+          { other: "Joren Vey", summary: "Joren Vey is the father of Mara Vey." },
+        ],
+      },
+      {
+        name: "Joren Vey",
+        appearance: "",
+        personality: "",
+        definingTraits: [],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 1,
+        mentionOrdinals: [1, 4],
+        relationships: [
+          { other: "Mara Vey", summary: "Mara Vey is the daughter of Joren Vey." },
+          { other: "Mara Vey", summary: "Joren Vey is the father of Mara Vey." },
+        ],
+      },
+    ]);
+    // Mention lists grow per ordinal: as of chapter 1 both are only ch1.
+    expect(bibleSnapshots[0]?.bible.characterProfiles.map((p) => p.mentionOrdinals)).toEqual([
+      [1],
+      [1],
+    ]);
+    expect(bibleSnapshots[0]?.bible.characterProfiles.map((p) => p.name)).toEqual([
+      "Mara Vey",
+      "Joren Vey",
+    ]);
+    // Prose aspects canon establishes nothing for stay empty placeholders.
     expect(finalBible?.bookOverview).toBe("");
-    expect(finalBible?.characterProfiles).toEqual([]);
     expect(finalBible?.locationProfiles).toEqual([]);
     // The derived graph: Mara Vey is mentioned 5 times, Joren Vey 4.
     expect(finalBible?.graph.nodes).toEqual([
