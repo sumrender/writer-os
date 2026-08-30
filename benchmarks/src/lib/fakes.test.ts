@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyStoryFacts } from "./story-facts.js";
 import { fakeCheck, fakeExtract, fakeGenerate, fakeSynthesizeBible, fakeSynthesizeChapterSummary } from "./fakes.js";
+import { fakeModelSections } from "./bible-sections.js";
 
 const CH1 = [
   "Introducing Mara Vey, keeper of the northern light.",
@@ -216,6 +217,8 @@ describe("fakeSynthesizeBible", () => {
     const bible = await fakeSynthesizeBible({ chapters, facts, summaries });
 
     expect(bible.chapterSummaries).toEqual(summaries);
+    const { chapterSummaries: _carried, graph, ...sections } = bible;
+    expect(sections).toEqual(fakeModelSections({ facts, chapterSummaries: summaries }));
     // Character profiles are canon-grounded: appearance/traits from facts,
     // mention ordinals from whole-name scans over the summaries. Canon here
     // establishes only names, so every prose aspect stays empty.
@@ -244,11 +247,9 @@ describe("fakeSynthesizeBible", () => {
       },
     ]);
     // Sections the canon establishes nothing for stay empty placeholders.
-    const { characterProfiles: _populated, graph, ...placeholders } = bible;
-    expect(placeholders.bookOverview).toBe("");
-    expect(placeholders.world).toEqual([]);
-    expect(placeholders.locationProfiles).toEqual([]);
-    expect(placeholders.threadRollups).toEqual([]);
+    expect(bible.bookOverview).toBe("");
+    expect(bible.locationProfiles).toEqual([]);
+    expect(bible.threadRollups).toEqual([]);
     expect(graph.nodes).toEqual([
       { name: "Mara Vey", importance: 1, role: "protagonist" },
       { name: "Joren Vey", importance: 1, role: "supporting" },

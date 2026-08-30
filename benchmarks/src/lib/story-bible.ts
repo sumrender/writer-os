@@ -9,9 +9,27 @@ import type { StoryFacts, ThreadStatus } from "./story-facts.js";
  * deterministic derivation in `bible-graph.ts`.
  */
 
-export interface WorldNote {
-  readonly topic: string;
+/** The World slice (issue #16): classification, description, and the world's
+ * rules stated in explicit relation to real-world (earth) rules. */
+export const WORLD_CLASSIFICATIONS = ["earth", "fantasy", "supernatural", "hybrid"] as const;
+export type WorldClassification = (typeof WORLD_CLASSIFICATIONS)[number];
+
+/** How one world rule relates to the real-world (earth) rules it deviates
+ * from or agrees with. */
+export const WORLD_RULE_RELATIONS = ["same_as_earth", "deviates_from_earth"] as const;
+export type WorldRuleRelation = (typeof WORLD_RULE_RELATIONS)[number];
+
+export interface WorldRule {
+  readonly rule: string;
+  readonly relation: WorldRuleRelation;
+  /** Prose stating the relation to earth rules in detail. */
   readonly note: string;
+}
+
+export interface WorldSection {
+  readonly classification: WorldClassification;
+  readonly description: string;
+  readonly rules: readonly WorldRule[];
 }
 
 export interface ProfileEntry {
@@ -77,7 +95,7 @@ export interface StyleField {
 /** The sections the Synthesize port models and validates. */
 export interface ModelSections {
   readonly bookOverview: string;
-  readonly world: readonly WorldNote[];
+  readonly world: WorldSection;
   readonly characterProfiles: readonly CharacterProfile[];
   readonly locationProfiles: readonly ProfileEntry[];
   readonly threadRollups: readonly ThreadRollup[];
@@ -144,10 +162,15 @@ export function emptyGraphData(): GraphData {
   return { nodes: [], edges: [] };
 }
 
+/** The valid EMPTY world placeholder: nothing established beyond earth rules. */
+export function emptyWorldSection(): WorldSection {
+  return { classification: "earth", description: "", rules: [] };
+}
+
 export function emptyStoryBible(): StoryBible {
   return {
     bookOverview: "",
-    world: [],
+    world: emptyWorldSection(),
     characterProfiles: [],
     locationProfiles: [],
     threadRollups: [],

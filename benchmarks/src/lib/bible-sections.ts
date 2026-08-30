@@ -5,7 +5,14 @@ import {
   positiveInt,
 } from "./schema-primitives.js";
 import { THREAD_STATUSES, type ThreadStatus } from "./story-facts.js";
+import type { SectionWireSchema } from "./section-wire.js";
 import { fakeCharacterProfiles, validateCharacterProfiles } from "./character-profiles.js";
+import {
+  WORLD_INSTRUCTION,
+  WORLD_WIRE_SCHEMA,
+  fakeWorld,
+  validateWorld,
+} from "./world-section.js";
 import type {
   LexiconNote,
   ModelSectionKey,
@@ -16,7 +23,7 @@ import type {
   SectionCanon,
   StyleField,
   ThreadRollup,
-  WorldNote,
+  WorldSection,
 } from "./story-bible.js";
 
 /**
@@ -32,13 +39,12 @@ import type {
  * per section (CODING_STANDARDS §3.2).
  */
 
-/** Tool-schema shape of one section's value on the synthesis wire. */
-export type SectionWireSchema =
-  | { readonly type: "string" }
-  | {
-      readonly type: "array";
-      readonly items: { readonly type: "object" } | { readonly type: "string" };
-    };
+/**
+ * Tool-schema shape of one section's value on the synthesis wire. Lives in
+ * `section-wire.ts` so section modules (e.g. World) can type their schema
+ * against it without importing this module's values back (one-way deps).
+ */
+export type { SectionWireSchema } from "./section-wire.js";
 
 export interface BibleSectionSpec<K extends ModelSectionKey> {
   readonly key: K;
@@ -51,12 +57,16 @@ export interface BibleSectionSpec<K extends ModelSectionKey> {
    * Trust-boundary validation against the section canon: returns the
    * precisely-typed section value or throws with a `near:` raw-payload
    * snippet. Unknown fields are dropped, recoverable shapes normalized,
-   * missing/ambiguous shapes rejected.
+   * missing/ambiguous shapes rejected. Sections ground against the canon to
+   * reject content it does not support (issue #15: unsourced characters;
+   * issue #16: unsupported world deviations); sections needing no check
+   * ignore it.
    */
   readonly validate: (raw: unknown, canon: SectionCanon) => ModelSections[K];
   /**
    * Deterministic fake seen through the section canon: an EMPTY placeholder
-   * whenever the canon establishes nothing, canon-grounded content otherwise.
+   * whenever the canon establishes nothing, canon-grounded content otherwise
+   * (e.g. World, issue #16, derives even from bare canon).
    */
   readonly fake: (canon: SectionCanon) => ModelSections[K];
 }
@@ -136,18 +146,10 @@ const REGISTRY = {
   world: {
     key: "world",
     wireKey: "world",
-    instruction:
-      "world: notes on the world's rules, settings, and background as established by canon. Value: an array of {topic, note} objects.",
-    wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly WorldNote[] =>
-      parseObjectArray<WorldNote>(
-        "world",
-        raw,
-        { identity: "topic", secondary: "note" },
-        (topic, note) => ({ topic, note }),
-        (topic) => ({ topic, note: "" }),
-      ),
-    fake: () => [],
+    instruction: WORLD_INSTRUCTION,
+    wireSchema: WORLD_WIRE_SCHEMA,
+    validate: (raw, canon): WorldSection => validateWorld(raw, canon.facts),
+    fake: (canon): WorldSection => fakeWorld(canon),
   },
   characterProfiles: {
     key: "characterProfiles",
@@ -349,8 +351,9 @@ function requireSectionValue(
  * top-level keys dropped, every section validated by its registered
  * validator against the section canon, a missing section rejected.
  * Genuinely malformed, ambiguous, or unsourced (e.g. a character profile
- * introducing an entity canon never establishes) section values propagate
- * the precise per-section rejection — nothing silently reaches the bible.
+ * introducing an entity canon never establishes, or a world deviation no
+ * canon world rule supports) section values propagate the precise
+ * per-section rejection — nothing silently reaches the bible.
  */
 export function validateBible(raw: unknown, canon: SectionCanon): ModelSections {
   if (!isPlainObject(raw)) {
@@ -426,7 +429,8 @@ export function bibleMasterPrompt(): string {
  * Deterministic fake dispatch across every registered section fake, seen
  * through the section canon: sections the canon establishes nothing for
  * ship valid empty placeholders; grounded sections populate (issue #15:
- * character profiles).
+ * character profiles; issue #16: the world, which derives even from bare
+ * canon).
  */
 export function fakeModelSections(canon: SectionCanon): ModelSections {
   return {
