@@ -4,7 +4,12 @@ import {
   nonEmptyString,
   positiveInt,
 } from "./schema-primitives.js";
-import { THREAD_STATUSES, type ThreadStatus } from "./story-facts.js";
+import {
+  THREAD_STATUSES,
+  factCount,
+  isThreadStatus,
+  type StoryFacts,
+} from "./story-facts.js";
 import type { SectionWireSchema } from "./section-wire.js";
 import { fakeCharacterProfiles, validateCharacterProfiles } from "./character-profiles.js";
 import {
@@ -13,7 +18,9 @@ import {
   fakeWorld,
   validateWorld,
 } from "./world-section.js";
+import { fakeBookOverview, fakeThreadRollups, threadStatusAssertions } from "./bible-fakes.js";
 import type {
+  BookOverview,
   BookTimelineEntry,
   LexiconNote,
   LocationCharacterSeen,
@@ -32,16 +39,17 @@ import type {
 import { TIMELINE_GROUNDINGS } from "./story-bible.js";
 
 /**
- * Composition machinery for Story Bible synthesis (issue #14, #17): the
+ * Composition machinery for Story Bible synthesis (issue #14, #17, #19): the
  * registry through which every aspect contributes its section's prompt block,
  * wire shape, validator, and deterministic fake. The master prompt assembles
  * the per-section blocks; the master `validateBible` delegates per-section
  * validation; the deterministic fake dispatches per-section fakes. Validators
  * and fakes see the section canon (facts + summaries so far, issue #15), so
  * aspects ground their sections — e.g. character profiles reject unsourced
- * entities — and fakes populate from the same canon. Aspects grow the bible
- * by adding registry entries — the machinery itself never edits a stable core
- * per section (CODING_STANDARDS §3.2).
+ * entities — and fakes populate from the same canon. The overview and
+ * thread-rollup sections (issue #19) carry canon-grounded validators and
+ * fakes. Aspects grow the bible by adding registry entries — the machinery
+ * itself never edits a stable core per section (CODING_STANDARDS §3.2).
  */
 
 /**
@@ -64,9 +72,10 @@ export interface BibleSectionSpec<K extends ModelSectionKey> {
    * snippet. Unknown fields are dropped, recoverable shapes normalized,
    * missing/ambiguous shapes rejected. Sections ground against the canon to
    * reject content it does not support (issue #15: unsourced characters;
-   * issue #16: unsupported world deviations); sections needing no check
-   * ignore it. The locations section (issue #17) stays pure-shape here: its
-   * grounding consults the raw chapter texts, which the section canon
+   * issue #16: unsupported world deviations; issue #19: invented threads and
+   * status changes without a basis in the fact layer); sections needing no
+   * check ignore it. The locations section (issue #17) stays pure-shape here:
+   * its grounding consults the raw chapter texts, which the section canon
    * deliberately excludes, so the synthesis caller layers the grounding
    * checks on top (see `grounded-locations.ts`).
    */
@@ -74,7 +83,8 @@ export interface BibleSectionSpec<K extends ModelSectionKey> {
   /**
    * Deterministic fake seen through the section canon: an EMPTY placeholder
    * whenever the canon establishes nothing, canon-grounded content otherwise
-   * (e.g. World, issue #16, derives even from bare canon).
+   * (e.g. World, issue #16, derives even from bare canon; the overview and
+   * thread rollups, issue #19).
    */
   readonly fake: (canon: SectionCanon) => ModelSections[K];
 }
@@ -136,8 +146,111 @@ function parseStringArray(where: string, raw: unknown): readonly string[] {
   });
 }
 
-function isThreadStatus(value: unknown): value is ThreadStatus {
-  return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
+const BOOK_OVERVIEW_FIELDS = [
+  "title",
+  "genre",
+  "era",
+  "setting",
+  "premise",
+  "synopsis",
+  "themes",
+] as const;
+
+/**
+ * Shape-validates the overview object: every field must be a string when
+ * present (recoverable null/missing normalizes to ""), unknown fields are
+ * dropped, and a genuinely non-string field hard-fails.
+ */
+function parseBookOverview(raw: unknown): BookOverview {
+  if (!isPlainObject(raw)) {
+    failSection("bookOverview", "must be an object with string fields", raw);
+  }
+  const overview: Record<string, string> = {};
+  for (const field of BOOK_OVERVIEW_FIELDS) {
+    const value = raw[field];
+    if (typeof value === "string") {
+      overview[field] = value;
+    } else if (value !== undefined && value !== null) {
+      failSection("bookOverview", `"${field}" must be a string`, value);
+    } else {
+      overview[field] = "";
+    }
+  }
+  return {
+    title: overview["title"] ?? "",
+    genre: overview["genre"] ?? "",
+    era: overview["era"] ?? "",
+    setting: overview["setting"] ?? "",
+    premise: overview["premise"] ?? "",
+    synopsis: overview["synopsis"] ?? "",
+    themes: overview["themes"] ?? "",
+  };
+}
+
+/**
+ * Canon-grounded overview check (issue #19): an overview is valid only when
+ * the canon establishes something to ground it, and the premise/synopsis may
+ * not assert a thread status that contradicts the fact layer or reference a
+ * thread that is not established — the deterministic "no invented plot
+ * events" and "no status changes without a basis" guard.
+ */
+function assertBookOverviewGrounded(overview: BookOverview, canon: StoryFacts): void {
+  if (factCount(canon) === 0) {
+    if (BOOK_OVERVIEW_FIELDS.some((field) => overview[field] !== "")) {
+      failSection("bookOverview", "canon establishes nothing; the overview must be empty", overview);
+    }
+    return;
+  }
+  assertThreadAssertionsGrounded(overview.premise, canon, "bookOverview");
+  assertThreadAssertionsGrounded(overview.synopsis, canon, "bookOverview");
+}
+
+/**
+ * Scans prose for `plot thread "X" stands Y` assertions (the canon's own
+ * phrase currency) and rejects any assertion the fact layer does not support:
+ * an unestablished thread or a status change without a basis in canon.
+ */
+function assertThreadAssertionsGrounded(text: string, canon: StoryFacts, where: string): void {
+  const byThread = new Map(canon.threads.map((thread) => [thread.thread, thread.status]));
+  for (const assertion of threadStatusAssertions(text)) {
+    const established = byThread.get(assertion.thread);
+    if (established === undefined) {
+      failSection(where, `thread \"${assertion.thread}\" is not established in canon`, assertion);
+    }
+    if (established !== assertion.status) {
+      failSection(
+        where,
+        `thread \"${assertion.thread}\" is asserted \"${assertion.status}\" but canon establishes \"${established}\"`,
+        assertion,
+      );
+    }
+  }
+}
+
+/**
+ * Canon-grounded thread-rollup check (issue #19): every rollup must name a
+ * thread the fact layer establishes and carry that thread's exact fact-layer
+ * status — the rollups summarize canon, never revise it.
+ */
+function assertThreadRollupsGrounded(rollups: readonly ThreadRollup[], canon: StoryFacts): void {
+  if (canon.threads.length === 0 && rollups.length > 0) {
+    failSection("threadRollups", "no threads established in canon; rollups must be empty", rollups);
+  }
+  const byThread = new Map(canon.threads.map((thread) => [thread.thread, thread.status]));
+  for (const rollup of rollups) {
+    const established = byThread.get(rollup.thread);
+    if (established === undefined) {
+      failSection("threadRollups", `thread \"${rollup.thread}\" is not established in canon`, rollup);
+    }
+    if (established !== rollup.status) {
+      failSection(
+        "threadRollups",
+        `thread \"${rollup.thread}\" is asserted \"${rollup.status}\" but canon establishes \"${established}\"`,
+        rollup,
+      );
+    }
+    assertThreadAssertionsGrounded(rollup.rollup, canon, "threadRollups");
+  }
 }
 
 function isTimelineGrounding(value: unknown): value is TimelineGrounding {
@@ -215,12 +328,29 @@ const REGISTRY = {
   bookOverview: {
     key: "bookOverview",
     wireKey: "book_overview",
-    instruction:
-      "book_overview: a one-paragraph overview of the whole book so far — premise, stakes, and where the story now stands. Value: a single string.",
-    wireSchema: { type: "string" },
-    validate: (raw): string =>
-      typeof raw === "string" ? raw : failSection("bookOverview", "must be a string", raw),
-    fake: () => "",
+    instruction: [
+      "book_overview: the book's overview as of this canon — the fields title, genre, era, setting, premise, one-page synopsis grounded strictly in what the canon as of this ordinal establishes (never later events or resolutions), and themes.",
+      "Value: an object with string fields {title, genre, era, setting, premise, synopsis, themes}; an empty string is valid wherever the canon establishes nothing for that field yet.",
+      "When the synopsis states a thread's status, use the canon's phrase form: plot thread \"...\" stands open|resolved|dormant, matching the Story Facts exactly.",
+    ].join(" "),
+    wireSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        genre: { type: "string" },
+        era: { type: "string" },
+        setting: { type: "string" },
+        premise: { type: "string" },
+        synopsis: { type: "string" },
+        themes: { type: "string" },
+      },
+    },
+    validate: (raw, canon): BookOverview => {
+      const overview = parseBookOverview(raw);
+      assertBookOverviewGrounded(overview, canon.facts);
+      return overview;
+    },
+    fake: ({ facts }) => fakeBookOverview(facts),
   },
   world: {
     key: "world",
@@ -259,10 +389,10 @@ const REGISTRY = {
     key: "threadRollups",
     wireKey: "thread_rollups",
     instruction:
-      "thread_rollups: per-thread status rollups. Value: an array of {thread, status, rollup} objects where status is one of open, resolved, dormant.",
+      "thread_rollups: per-thread rollups summarizing each established thread's arc through the story so far. Value: an array of {thread, status, rollup} objects, one per canon thread, where status must equal the Story Facts status exactly (open, resolved, or dormant) — never change a status the fact layer has not changed.",
     wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly ThreadRollup[] =>
-      parseObjectArray<ThreadRollup>(
+    validate: (raw, canon): readonly ThreadRollup[] => {
+      const rollups = parseObjectArray<ThreadRollup>(
         "threadRollups",
         raw,
         { identity: "thread", secondary: "rollup" },
@@ -277,8 +407,11 @@ const REGISTRY = {
           }
           return { thread, status, rollup };
         },
-      ),
-    fake: () => [],
+      );
+      assertThreadRollupsGrounded(rollups, canon.facts);
+      return rollups;
+    },
+    fake: (canon) => fakeThreadRollups(canon),
   },
   groups: {
     key: "groups",
@@ -461,8 +594,9 @@ function requireSectionValue(
  * top-level keys dropped, every section validated by its registered
  * validator against the section canon, a missing section rejected.
  * Genuinely malformed, ambiguous, or unsourced (e.g. a character profile
- * introducing an entity canon never establishes, or a world deviation no
- * canon world rule supports) section values propagate the precise
+ * introducing an entity canon never establishes, a world deviation no
+ * canon world rule supports, or a thread rollup contradicting the fact
+ * layer) section values propagate the precise
  * per-section rejection — nothing silently reaches the bible. The locations
  * section's chapter-text grounding is NOT applied here (the canon cannot see
  * chapter texts): synthesis callers layer it via `grounded-locations.ts`
@@ -527,6 +661,7 @@ export function validateBible(raw: unknown, canon: SectionCanon): ModelSections 
 const BIBLE_PROMPT_HEADER = [
   "You are the Story Bible synthesizer distilling graded Story Facts and chapter summaries into an author-facing bible (ADR-0007: two-layer canon).",
   "Emit exactly the requested sections; every section's value must match its documented shape precisely.",
+  "Every section's content must be supported by the Story Facts as of the current ordinal — never invent plot events, threads, or status changes.",
   "An empty array (or empty overview) is valid whenever the canon establishes nothing for that section — never invent content.",
 ].join(" ");
 
@@ -543,7 +678,7 @@ export function bibleMasterPrompt(): string {
  * through the section canon: sections the canon establishes nothing for
  * ship valid empty placeholders; grounded sections populate (issue #15:
  * character profiles; issue #16: the world, which derives even from bare
- * canon).
+ * canon; issue #19: the overview and thread rollups).
  */
 export function fakeModelSections(canon: SectionCanon): ModelSections {
   return {

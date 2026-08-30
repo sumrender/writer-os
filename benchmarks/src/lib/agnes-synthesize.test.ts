@@ -50,7 +50,15 @@ const SUMMARY_INPUT = {
 };
 
 const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
-  bookOverview: "An overview.",
+  bookOverview: {
+    title: "The Brass Compass",
+    genre: "keeper's tale",
+    era: "the age of the light",
+    setting: "the light",
+    premise: "A keeper's tale.",
+    synopsis: 'plot thread "the ledger" stands open',
+    themes: "light",
+  },
   world: {
     classification: "earth",
     description: "An earth-like world.",
@@ -110,6 +118,7 @@ const BIBLE_INPUT = (): {
     characters: [{ name: "Mara Vey" }],
     relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
     locations: [{ name: "the light" }],
+    threads: [{ thread: "the ledger", status: "open" }],
   },
   summaries: [
     { ordinal: 1, summary: "One." },
@@ -223,7 +232,7 @@ describe("createAgnesBibleSynthesizer — per-section", () => {
     }
     // Validators normalize the profile's missing prose aspects to "".
     expect(bible.characterProfiles).toEqual([MARA_PROFILE]);
-    expect(bible.bookOverview).toBe("An overview.");
+    expect(bible.bookOverview).toEqual(SECTION_VALUES.bookOverview);
     expect(bible.chapterSummaries).toEqual(input.summaries);
     // The graph derives deterministically from the input facts: the character
     // node plus the relationship endpoint, with the relationship edge.
@@ -273,7 +282,7 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
   it("makes exactly one assemble_bible call with the master prompt and validates the flat payload", async () => {
     const { client, requests } = scriptedClient([
       bibleResponse({
-        book_overview: "An overview.",
+        book_overview: SECTION_VALUES.bookOverview,
         world: { classification: "earth", description: "", rules: [] },
         character_profiles: [MARA_PROFILE],
         locations: [],
@@ -298,15 +307,15 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
     expect(prompt).toContain("book_overview:");
     expect(prompt).toContain("book_timeline:");
     expect(prompt).toContain("character_profiles:");
-    expect(bible.bookOverview).toBe("An overview.");
+    expect(bible.bookOverview).toEqual(SECTION_VALUES.bookOverview);
     expect(bible.characterProfiles).toEqual([MARA_PROFILE]);
     expect(bible.chapterSummaries).toEqual(input.summaries);
   });
 
   it("hard-fails a payload missing sections — nothing silently reaches the bible", async () => {
     const { client, requests } = scriptedClient([
-      bibleResponse({ book_overview: "only one section" }),
-      bibleResponse({ book_overview: "still broken" }),
+      bibleResponse({ book_overview: SECTION_VALUES.bookOverview }),
+      bibleResponse({ book_overview: SECTION_VALUES.bookOverview }),
     ]);
     const synthesize = createAgnesBibleSynthesizer(client, { strategy: "monolithic" });
 
@@ -322,7 +331,7 @@ describe("synthesis response cache", () => {
     let calls = 0;
     const responses = [
       bibleResponse({
-        book_overview: "An overview.",
+        book_overview: SECTION_VALUES.bookOverview,
         world: { classification: "earth", description: "", rules: [] },
         character_profiles: [MARA_PROFILE],
         locations: [],
@@ -368,7 +377,7 @@ describe("synthesis response cache", () => {
     const client: AgnesClient = {
       model: "agnes-2.5-flash",
       async complete() {
-        return bibleResponse({ book_overview: "missing everything else" });
+        return bibleResponse({ book_overview: SECTION_VALUES.bookOverview });
       },
     };
     const synthesize = createAgnesBibleSynthesizer(client, {

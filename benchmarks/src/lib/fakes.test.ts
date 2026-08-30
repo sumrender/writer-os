@@ -203,7 +203,7 @@ describe("fakeSynthesizeChapterSummary", () => {
 });
 
 describe("fakeSynthesizeBible", () => {
-  it("carries the summaries, derives the graph, populates character profiles from canon, and seeds Locations from facts (issue #17)", async () => {
+  it("carries the summaries, derives the graph, populates character profiles and the canon-grounded prose sections from canon, and seeds Locations from facts (issue #17, #19)", async () => {
     const chapters = [
       "Introducing Mara Vey, keeper of the northern light.\nThe scene is set in the northern light.",
       "Introducing Joren Vey, once keeper before her.",
@@ -250,8 +250,11 @@ describe("fakeSynthesizeBible", () => {
         relationships: [],
       },
     ]);
-    // Sections the canon establishes nothing for stay empty placeholders.
-    expect(bible.bookOverview).toBe("");
+    // The canon-grounding prose fakes (issue #19): the overview populates once
+    // the canon establishes places and people, and the thread rollups mirror
+    // the (empty) fact-layer threads.
+    expect(bible.bookOverview.title).toBe("The Northern Light");
+    expect(bible.bookOverview.premise).toBe("The tale of Mara Vey.");
     expect(bible.threadRollups).toEqual([]);
     // Mara is named alongside the location in ch1; Joren is not — no co-occurrence.
     expect(bible.locations).toEqual([

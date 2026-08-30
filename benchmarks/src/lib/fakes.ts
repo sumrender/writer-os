@@ -1,8 +1,7 @@
 import {
-  THREAD_STATUSES,
   emptyStoryFacts,
+  isThreadStatus,
   type StoryFacts,
-  type ThreadStatus,
 } from "./story-facts.js";
 import { emptyStoryBible, storyBibleFromSections, type BookTimelineEntry, type WorldTimelineEvent } from "./story-bible.js";
 import type {
@@ -62,10 +61,6 @@ function group(match: RegExpMatchArray, index: number): string {
     throw new Error(`fake grammar: capture group ${index} missing (pattern/accessor drift)`);
   }
   return value;
-}
-
-function isThreadStatus(value: unknown): value is ThreadStatus {
-  return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
 }
 
 const RULES: readonly FactRule[] = [

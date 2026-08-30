@@ -1,8 +1,8 @@
 import {
   ENTITY_KINDS,
   THREAD_STATUSES,
+  isThreadStatus,
   type EntityKind,
-  type ThreadStatus,
 } from "./story-facts.js";
 import { applyFact, type ExtractedFact } from "./fact-merge.js";
 import { storyFacts } from "./fact-text.js";
@@ -86,10 +86,6 @@ const EXTRACT_TOOL = {
 
 function isEntityKind(value: unknown): value is EntityKind {
   return typeof value === "string" && (ENTITY_KINDS as readonly string[]).includes(value);
-}
-
-function isThreadStatus(value: unknown): value is ThreadStatus {
-  return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
 }
 
 /**

@@ -1,8 +1,9 @@
 import type { StoryFacts, ThreadStatus } from "./story-facts.js";
 
 /**
- * Story Bible shape (issue #14, refined in #17): the synthesized, author-facing
- * document distilled from the graded Story Facts store and the chapter texts
+ * Story Bible shape (issue #14, refined in #17 and #19): the synthesized,
+ * author-facing document distilled from the graded Story Facts store and the
+ * chapter texts
  * (ADR-0007: two-layer canon). Twelve *model* sections are produced by the
  * Synthesize port; two members are derived, never modeled —
  * `chapterSummaries` is carried from the synthesis inputs and `graph` is the
@@ -51,10 +52,29 @@ export interface WorldRule {
   readonly note: string;
 }
 
+/** The World slice (issue #16): classification, description, and the world's
+ * rules stated in explicit relation to real-world (earth) rules. */
 export interface WorldSection {
   readonly classification: WorldClassification;
   readonly description: string;
   readonly rules: readonly WorldRule[];
+}
+
+/**
+ * The book-level overview (issue #19): the author-facing statement of what
+ * the book is, synthesized per ordinal. Every field is free prose grounded
+ * in the canon *as of that ordinal* — title, genre, era, setting, premise,
+ * the one-page synopsis (never a final-book spoiler at an early ordinal),
+ * and themes.
+ */
+export interface BookOverview {
+  readonly title: string;
+  readonly genre: string;
+  readonly era: string;
+  readonly setting: string;
+  readonly premise: string;
+  readonly synopsis: string;
+  readonly themes: string;
 }
 
 export interface ProfileEntry {
@@ -136,7 +156,7 @@ export interface BookTimelineEntry {
 
 /** The sections the Synthesize port models and validates. */
 export interface ModelSections {
-  readonly bookOverview: string;
+  readonly bookOverview: BookOverview;
   readonly world: WorldSection;
   readonly characterProfiles: readonly CharacterProfile[];
   /**
@@ -210,6 +230,11 @@ export function emptyGraphData(): GraphData {
   return { nodes: [], edges: [] };
 }
 
+/** The valid empty overview: nothing established yet. */
+export function emptyBookOverview(): BookOverview {
+  return { title: "", genre: "", era: "", setting: "", premise: "", synopsis: "", themes: "" };
+}
+
 /** The valid EMPTY world placeholder: nothing established beyond earth rules. */
 export function emptyWorldSection(): WorldSection {
   return { classification: "earth", description: "", rules: [] };
@@ -217,7 +242,7 @@ export function emptyWorldSection(): WorldSection {
 
 export function emptyStoryBible(): StoryBible {
   return {
-    bookOverview: "",
+    bookOverview: emptyBookOverview(),
     world: emptyWorldSection(),
     characterProfiles: [],
     locations: [],

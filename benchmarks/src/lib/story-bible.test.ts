@@ -7,6 +7,7 @@ import {
   validateBible,
 } from "./bible-sections.js";
 import {
+  emptyBookOverview,
   emptyStoryBible,
   emptyWorldSection,
   storyBibleFromSections,
@@ -23,16 +24,22 @@ import { emptyStoryFacts } from "./story-facts.js";
  * shapes normalized, `near:` snippets on every rejection, and genuinely
  * ambiguous payloads hard-failing — nothing silently reaches the bible.
  * Since issue #15 every validator and fake also grounds against the section
- * canon (facts + summaries), so the tests validate against a canon too.
+ * canon (facts + summaries), so the tests validate against a canon too. The
+ * overview and thread-rollup sections additionally validate their content
+ * against the graded Story Facts (issue #19): no invented threads, plot
+ * events, or status changes without a fact-layer basis.
  */
 
-/** Canon backing {@link VALID_PAYLOAD}: one deviating world rule and the
- * characters its character profiles are grounded in. */
+/** Canon backing {@link VALID_PAYLOAD}: one deviating world rule, the
+ * characters its character profiles are grounded in, and the thread its
+ * overview and thread rollups assert (issue #19). */
 const CANON: SectionCanon = {
   facts: {
     ...emptyStoryFacts(),
     characters: [{ name: "Mara Vey" }],
     relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
+    locations: [{ name: "the northern light" }],
+    threads: [{ thread: "the missing ledger", status: "resolved" }],
     worldRules: [{ topic: "the northern light burns without oil" }],
   },
   chapterSummaries: [{ ordinal: 1, summary: "Mara Vey keeps the light; Joren Vey visits." }],
@@ -41,7 +48,15 @@ const CANON: SectionCanon = {
 const EMPTY_CANON: SectionCanon = { facts: emptyStoryFacts(), chapterSummaries: [] };
 
 const VALID_PAYLOAD = {
-  book_overview: "A keeper's tale of light and ledgers.",
+  book_overview: {
+    title: "The Brass Compass",
+    genre: "keeper's tale",
+    era: "the age of the light",
+    setting: "the northern light",
+    premise: "A keeper's tale of light and ledgers.",
+    synopsis: 'the harbor bell rang. plot thread "the missing ledger" stands resolved',
+    themes: "light and ledgers",
+  },
   world: {
     classification: "hybrid",
     description: "A harbor town where one canon rule deviates from the real world.",
@@ -129,11 +144,22 @@ describe("section registry", () => {
     expect(sections.locations).toEqual([]);
   });
 
-  it("marks bookOverview a string section, World an object section, the rest arrays", () => {
+  it("marks bookOverview and World object sections, the rest arrays of objects", () => {
     for (const key of MODEL_SECTION_KEYS) {
       const schema = BIBLE_SECTIONS[key].wireSchema;
       if (key === "bookOverview") {
-        expect(schema).toEqual({ type: "string" });
+        expect(schema).toEqual({
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            genre: { type: "string" },
+            era: { type: "string" },
+            setting: { type: "string" },
+            premise: { type: "string" },
+            synopsis: { type: "string" },
+            themes: { type: "string" },
+          },
+        });
       } else if (key === "world") {
         if (schema.type !== "object") {
           throw new Error("world wire schema must be an object section");
@@ -162,15 +188,10 @@ describe("master prompt", () => {
 });
 
 describe("per-section trust boundary (via the registry validators)", () => {
-  it("validates each section of a well-formed payload", () => {
+  it("validates each section of a well-formed payload against the same canon", () => {
     for (const key of MODEL_SECTION_KEYS) {
       const wireValue = VALID_PAYLOAD[BIBLE_SECTIONS[key].wireKey as keyof typeof VALID_PAYLOAD];
-      const validated = BIBLE_SECTIONS[key].validate(wireValue, CANON);
-      if (key === "bookOverview") {
-        expect(validated).toEqual(VALID_PAYLOAD.book_overview);
-      } else {
-        expect(validated).toEqual(wireValue);
-      }
+      expect(BIBLE_SECTIONS[key].validate(wireValue, CANON)).toEqual(wireValue);
     }
   });
 
@@ -256,11 +277,16 @@ describe("per-section trust boundary (via the registry validators)", () => {
     ).toThrow(/bookTimeline\[1\]events: entry #0 must be a non-empty string/);
   });
 
-  it("hard-fails a string section receiving a non-string value", () => {
+  it("hard-fails the overview section receiving a non-object value", () => {
     expect(() => BIBLE_SECTIONS.bookOverview.validate(["an", "array"], CANON)).toThrow(
-      /bookOverview: must be a string/,
+      /bookOverview: must be an object with string fields/,
     );
-    expect(() => BIBLE_SECTIONS.bookOverview.validate(42, CANON)).toThrow(/bookOverview: must be a string/);
+    expect(() => BIBLE_SECTIONS.bookOverview.validate(42, CANON)).toThrow(
+      /bookOverview: must be an object with string fields/,
+    );
+    expect(() =>
+      BIBLE_SECTIONS.bookOverview.validate({ title: "The Brass Compass", setting: 4 }, CANON),
+    ).toThrow(/"setting" must be a string/);
   });
 
   it("attaches a truncated near: snippet to every rejection", () => {
@@ -273,6 +299,95 @@ describe("per-section trust boundary (via the registry validators)", () => {
       expect(snippet).toContain('{"description":"');
       expect(snippet.length).toBeLessThanOrEqual(160);
     }
+  });
+});
+
+describe("canon-grounded validators (issue #19)", () => {
+  const overview = (synopsis: string) => ({
+    title: "The Brass Compass",
+    genre: "keeper's tale",
+    era: "the age of the light",
+    setting: "the northern light",
+    premise: "A keeper's tale of light and ledgers.",
+    synopsis,
+    themes: "light and ledgers",
+  });
+
+  it("rejects an overview asserting a thread status the canon has not established", () => {
+    expect(() =>
+      BIBLE_SECTIONS.bookOverview.validate(
+        { ...overview("all quiet"), premise: 'plot thread "the buried ransom" stands open' },
+        CANON,
+      ),
+    ).toThrow(/thread "the buried ransom" is not established in canon/);
+  });
+
+  it("rejects an overview that resolves a thread the fact layer still holds open", () => {
+    const openCanon: SectionCanon = {
+      facts: {
+        ...emptyStoryFacts(),
+        threads: [{ thread: "the missing ledger", status: "open" }],
+      },
+      chapterSummaries: [],
+    };
+    expect(() =>
+      BIBLE_SECTIONS.bookOverview.validate(
+        overview('plot thread "the missing ledger" stands resolved'),
+        openCanon,
+      ),
+    ).toThrow(/thread "the missing ledger" is asserted "resolved" but canon establishes "open"/);
+  });
+
+  it("rejects a populated overview when the canon establishes nothing yet", () => {
+    expect(() =>
+      BIBLE_SECTIONS.bookOverview.validate(overview("the harbor bell rang"), EMPTY_CANON),
+    ).toThrow(/canon establishes nothing; the overview must be empty/);
+  });
+
+  it("accepts an empty overview for an unestablished canon", () => {
+    expect(BIBLE_SECTIONS.bookOverview.validate({}, EMPTY_CANON)).toEqual(emptyBookOverview());
+  });
+
+  it("rejects a thread rollup for a thread the canon does not establish", () => {
+    expect(() =>
+      BIBLE_SECTIONS.threadRollups.validate(
+        [{ thread: "the buried ransom", status: "open", rollup: "dug up." }],
+        CANON,
+      ),
+    ).toThrow(/thread "the buried ransom" is not established in canon/);
+  });
+
+  it("rejects a rollup whose status contradicts the fact layer", () => {
+    expect(() =>
+      BIBLE_SECTIONS.threadRollups.validate(
+        [{ thread: "the missing ledger", status: "open", rollup: "Still missing." }],
+        CANON,
+      ),
+    ).toThrow(/thread "the missing ledger" is asserted "open" but canon establishes "resolved"/);
+  });
+
+  it("rejects any rollup when the canon has no threads at all", () => {
+    expect(() =>
+      BIBLE_SECTIONS.threadRollups.validate(
+        [{ thread: "the missing ledger", status: "open", rollup: "Still missing." }],
+        EMPTY_CANON,
+      ),
+    ).toThrow(/no threads established in canon; rollups must be empty/);
+  });
+
+  it("rejects a rollup prose that contradicts the canon even when the fields match", () => {
+    expect(() =>
+      BIBLE_SECTIONS.threadRollups.validate(
+        [
+          {
+            thread: "the missing ledger",
+            status: "resolved",
+            rollup: 'plot thread "the missing ledger" stands open',
+          },
+        ],
+        CANON,
+      ),
+    ).toThrow(/thread "the missing ledger" is asserted "open" but canon establishes "resolved"/);
   });
 });
 
@@ -342,5 +457,104 @@ describe("validateBible — monolithic trust boundary", () => {
         CANON,
       ),
     ).toThrow(/introduces unsourced character "Bellin the harbormaster"/);
+  });
+});
+
+describe("canon-grounded fakes (issue #19)", () => {
+  const synthCanon = (): SectionCanon => ({
+    facts: {
+      ...emptyStoryFacts(),
+      characters: [{ name: "Mara Vey" }, { name: "Joren Vey" }],
+      locations: [{ name: "the northern light" }],
+      items: [{ item: "brass compass", holder: "Mara Vey" }],
+      threads: [{ thread: "the missing ledger", status: "open" as const }],
+      timeline: ["the harbor bell rang"],
+    },
+    chapterSummaries: [
+      { ordinal: 1, summary: "Mara Vey and Joren Vey arrive at the light." },
+      {
+        ordinal: 2,
+        summary: 'Mara Vey and Joren Vey watch as plot thread "the missing ledger" stands open',
+      },
+    ],
+  });
+
+  it("derives a populated overview once the canon is established and empty before", () => {
+    const sections = fakeModelSections(synthCanon());
+    expect(sections.bookOverview).toEqual({
+      title: "The Northern Light",
+      genre: "unstated by the canon",
+      era: "unstated by the canon",
+      setting: "the northern light",
+      premise: 'The tale of Mara Vey and the matter of "the missing ledger".',
+      synopsis: 'the harbor bell rang. plot thread "the missing ledger" stands open.',
+      themes: "brass compass",
+    });
+    expect(fakeModelSections(EMPTY_CANON).bookOverview).toEqual(emptyBookOverview());
+  });
+
+  it("grounds every overview field in canon tokens only", () => {
+    const overview = fakeModelSections(synthCanon()).bookOverview;
+    for (const value of Object.values(overview)) {
+      expect(value).not.toBe("");
+    }
+    // Every non-placeholder phrase references only established canon names.
+    expect(overview.setting).toContain("the northern light");
+    expect(overview.premise).toContain("Mara Vey");
+    expect(overview.synopsis).toContain("the harbor bell rang");
+  });
+
+  it("derives thread rollups mirroring the fact-layer status and arc", () => {
+    const sections = fakeModelSections(synthCanon());
+    expect(sections.threadRollups).toEqual([
+      {
+        thread: "the missing ledger",
+        status: "open",
+        rollup: "Opened by chapter 2 and still open as of chapter 2.",
+      },
+    ]);
+  });
+
+  it("keeps the synopsis per-ordinal: no later events at an early ordinal", () => {
+    const early = fakeModelSections({
+      facts: {
+        ...emptyStoryFacts(),
+        characters: [{ name: "Mara Vey" }],
+        locations: [{ name: "the northern light" }],
+        timeline: ["the harbor bell rang"],
+      },
+      chapterSummaries: [],
+    }).bookOverview;
+    expect(early.synopsis).toBe("the harbor bell rang.");
+    expect(early.synopsis).not.toContain("burned");
+    expect(early.synopsis).not.toContain("resolved");
+  });
+
+  it("is deterministic: identical canons produce deep-equal sections", () => {
+    expect(fakeModelSections(synthCanon())).toEqual(fakeModelSections(synthCanon()));
+  });
+
+  it("produces fake output that passes the canon-grounded validators", () => {
+    const canon = synthCanon();
+    const sections = fakeModelSections(canon);
+    expect(
+      validateBible(
+        {
+          book_overview: sections.bookOverview,
+          world: sections.world,
+          character_profiles: sections.characterProfiles,
+          locations: sections.locations,
+          thread_rollups: sections.threadRollups,
+          groups: sections.groups,
+          items_of_significance: sections.itemsOfSignificance,
+          lexicon_notes: sections.lexiconNotes,
+          open_loops: sections.openLoops,
+          style_rollup: sections.styleRollup,
+          world_timeline: sections.worldTimeline,
+          book_timeline: sections.bookTimeline,
+        },
+        canon,
+      ),
+    ).toEqual(sections);
   });
 });

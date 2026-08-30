@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type {
+  BookOverview,
   LocationProfile,
   StoryBible as StoryBibleState,
   WorldClassification,
@@ -17,8 +18,31 @@ import { SectionCard, threadTone } from "./SectionCard.js";
  * real-world (earth) rules. Characters render through their own section
  * (issue #15): cards plus a detail drawer. The Locations section (issue #17)
  * renders the location list and per-location detail (description,
- * significance, characters seen with first co-occurrence ordinal).
+ * significance, characters seen with first co-occurrence ordinal). The book
+ * overview and thread-rollup sections carry the issue #19 prose baselines.
  */
+
+/** True when every overview field is still empty (nothing to show yet). */
+function isOverviewEmpty(overview: BookOverview): boolean {
+  return (
+    overview.title === "" &&
+    overview.genre === "" &&
+    overview.era === "" &&
+    overview.setting === "" &&
+    overview.premise === "" &&
+    overview.synopsis === "" &&
+    overview.themes === ""
+  );
+}
+
+function OverviewField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</dt>
+      <dd className="text-sm text-zinc-300">{value === "" ? "—" : value}</dd>
+    </div>
+  );
+}
 
 function locationHasContent(location: LocationProfile): boolean {
   return (
@@ -111,10 +135,18 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
     <div className="grid gap-4 sm:grid-cols-2">
       <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 sm:col-span-2">
         <h4 className="mb-2 text-sm font-semibold text-zinc-200">Book overview</h4>
-        {bible.bookOverview === "" ? (
+        {isOverviewEmpty(bible.bookOverview) ? (
           <p className="text-sm text-zinc-600">none yet</p>
         ) : (
-          <p className="text-sm text-zinc-300">{bible.bookOverview}</p>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <OverviewField label="Title" value={bible.bookOverview.title} />
+            <OverviewField label="Genre" value={bible.bookOverview.genre} />
+            <OverviewField label="Era" value={bible.bookOverview.era} />
+            <OverviewField label="Setting" value={bible.bookOverview.setting} />
+            <OverviewField label="Premise" value={bible.bookOverview.premise} />
+            <OverviewField label="Synopsis" value={bible.bookOverview.synopsis} />
+            <OverviewField label="Themes" value={bible.bookOverview.themes} />
+          </dl>
         )}
       </section>
 
@@ -133,14 +165,16 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
       </SectionCard>
 
       <SectionCard title="Thread rollups" count={bible.threadRollups.length}>
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {bible.threadRollups.map((t) => (
             <li key={t.thread} className="text-zinc-300">
-              <span className="font-medium text-zinc-100">{t.thread}</span>{" "}
-              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${threadTone(t.status)}`}>
-                {t.status}
+              <span className="flex items-center gap-2">
+                <span className="font-medium text-zinc-100">{t.thread}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${threadTone(t.status)}`}>
+                  {t.status}
+                </span>
               </span>
-              <span className="block">{t.rollup}</span>
+              <span className="mt-1 block text-sm text-zinc-400">{t.rollup}</span>
             </li>
           ))}
         </ul>
