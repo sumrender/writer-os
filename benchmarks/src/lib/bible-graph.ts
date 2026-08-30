@@ -1,5 +1,6 @@
 import type { GraphData, GraphNode } from "./story-bible.js";
 import type { StoryFacts } from "./story-facts.js";
+import { namePattern } from "./text-occurrence.js";
 
 /**
  * Deterministic graph-data derivation (issue #14): the data layer of the
@@ -10,14 +11,9 @@ import type { StoryFacts } from "./story-facts.js";
  * top-level protagonist field (DRY).
  */
 
-/** Escapes a name for exact literal use inside a RegExp. */
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /** Case-sensitive whole-name occurrence count: letter boundaries on both sides. */
 function countOccurrences(chapterTexts: readonly string[], name: string): number {
-  const pattern = new RegExp(`(?<![A-Za-z])${escapeRegExp(name)}(?![A-Za-z])`, "g");
+  const pattern = namePattern(name);
   let count = 0;
   for (const text of chapterTexts) {
     count += text.split(pattern).length - 1;

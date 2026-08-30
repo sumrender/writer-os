@@ -1,19 +1,21 @@
 import { isPlainObject, nonEmptyString, positiveInt } from "./schema-primitives.js";
 import { THREAD_STATUSES, type ThreadStatus } from "./story-facts.js";
-import type {
-  LexiconNote,
-  ModelSectionKey,
-  ModelSections,
-  NamedDescription,
-  OpenLoop,
-  ProfileEntry,
-  StyleField,
-  ThreadRollup,
-  WorldNote,
+import {
+  type LexiconNote,
+  type LocationCharacterSeen,
+  type LocationProfile,
+  type ModelSectionKey,
+  type ModelSections,
+  type NamedDescription,
+  type OpenLoop,
+  type ProfileEntry,
+  type StyleField,
+  type ThreadRollup,
+  type WorldNote,
 } from "./story-bible.js";
 
 /**
- * Composition machinery for Story Bible synthesis (issue #14, ADR-0007): the
+ * Composition machinery for Story Bible synthesis (issue #14, #17): the
  * registry through which every aspect contributes its section's prompt block,
  * wire shape, validator, and deterministic fake. The master prompt assembles
  * the per-section blocks; the master `validateBible` delegates per-section
@@ -38,9 +40,12 @@ export interface BibleSectionSpec<K extends ModelSectionKey> {
   readonly instruction: string;
   readonly wireSchema: SectionWireSchema;
   /**
-   * Trust-boundary validation: returns the precisely-typed section value or
-   * throws with a `near:` raw-payload snippet. Unknown fields are dropped,
-   * recoverable shapes normalized, missing/ambiguous shapes rejected.
+   * Trust-boundary shape validation: returns the precisely-typed section
+   * value or throws with a `near:` raw-payload snippet. Unknown fields are
+   * dropped, recoverable shapes normalized, missing/ambiguous shapes
+   * rejected. The locations section (issue #17) ALSO consults a separate
+   * grounding context supplied by callers with the canon in hand; the
+   * pure-shape validator never does (see `grounded-locations.ts`).
    */
   readonly validate: (raw: unknown) => ModelSections[K];
   /** Deterministic baseline fake: a valid EMPTY placeholder. */
@@ -124,6 +129,73 @@ function isThreadStatus(value: unknown): value is ThreadStatus {
   return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
 }
 
+/**
+ * Strict structural validation for the `locations` section (issue #17).
+ * Pure shape: no grounding context consulted. The grounding-aware variant
+ * lives in `grounded-locations.ts` and imports this parser.
+ */
+export function parseLocations(raw: unknown): readonly LocationProfile[] {
+  if (!Array.isArray(raw)) {
+    failSection("locations", "must be an array of {name, description, significance, charactersSeen} entries", raw);
+  }
+  return raw.map((entry, index): LocationProfile => {
+    if (!isPlainObject(entry)) {
+      failSection(
+        "locations",
+        `entry #${index} must be an object with a non-empty "name"`,
+        entry,
+      );
+    }
+    const name = entry["name"];
+    if (!nonEmptyString(name)) {
+      failSection("locations", `entry #${index} "name" must be a non-empty string`, entry);
+    }
+    const description = entry["description"];
+    if (!nonEmptyString(description)) {
+      failSection("locations", `entry #${index} "description" must be a non-empty string`, entry);
+    }
+    const significance = entry["significance"];
+    if (!nonEmptyString(significance)) {
+      failSection("locations", `entry #${index} "significance" must be a non-empty string`, entry);
+    }
+    const charactersSeenRaw = entry["charactersSeen"];
+    if (!Array.isArray(charactersSeenRaw)) {
+      failSection(
+        "locations",
+        `entry #${index} "charactersSeen" must be an array of {character, firstCoOccurrenceOrdinal} entries`,
+        entry,
+      );
+    }
+    const charactersSeen: LocationCharacterSeen[] = charactersSeenRaw.map((seen, seenIndex) => {
+      if (!isPlainObject(seen)) {
+        failSection(
+          "locations",
+          `entry #${index} "charactersSeen" #${seenIndex} must be an object`,
+          seen,
+        );
+      }
+      const character = seen["character"];
+      if (!nonEmptyString(character)) {
+        failSection(
+          "locations",
+          `entry #${index} "charactersSeen" #${seenIndex} "character" must be a non-empty string`,
+          seen,
+        );
+      }
+      const firstCoOccurrenceOrdinal = seen["firstCoOccurrenceOrdinal"];
+      if (!positiveInt(firstCoOccurrenceOrdinal)) {
+        failSection(
+          "locations",
+          `entry #${index} "charactersSeen" #${seenIndex} "firstCoOccurrenceOrdinal" must be a positive integer`,
+          seen,
+        );
+      }
+      return { character, firstCoOccurrenceOrdinal };
+    });
+    return { name, description, significance, charactersSeen };
+  });
+}
+
 const REGISTRY = {
   bookOverview: {
     key: "bookOverview",
@@ -167,20 +239,13 @@ const REGISTRY = {
       ),
     fake: () => [],
   },
-  locationProfiles: {
-    key: "locationProfiles",
-    wireKey: "location_profiles",
+  locations: {
+    key: "locations",
+    wireKey: "locations",
     instruction:
-      "location_profiles: per-location profile distillations drawn from canon. Value: an array of {name, profile} objects.",
+      "locations: per-location bible entries drawn from canon. Value: an array of {name, description, significance, charactersSeen} objects where charactersSeen is an array of {character, firstCoOccurrenceOrdinal} listing every canon-established character who appears at the location, with the chapter ordinal of their first co-occurrence.",
     wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly ProfileEntry[] =>
-      parseObjectArray<ProfileEntry>(
-        "locationProfiles",
-        raw,
-        { identity: "name", secondary: "profile" },
-        (name, profile) => ({ name, profile }),
-        (name) => ({ name, profile: "" }),
-      ),
+    validate: (raw): readonly LocationProfile[] => parseLocations(raw),
     fake: () => [],
   },
   threadRollups: {
@@ -352,6 +417,10 @@ function requireSectionValue(
  * validator, a missing section rejected. Genuinely malformed or ambiguous
  * section values propagate the precise per-section rejection — nothing
  * silently reaches the bible.
+ *
+ * The monolithic validator does not have a grounding context: its job is the
+ * trust-boundary shape check. Synthesis callers run the grounding-aware
+ * validators directly with the canon in hand (issue #17).
  */
 export function validateBible(raw: unknown): ModelSections {
   if (!isPlainObject(raw)) {
@@ -365,8 +434,8 @@ export function validateBible(raw: unknown): ModelSections {
     characterProfiles: BIBLE_SECTIONS.characterProfiles.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.characterProfiles.wireKey),
     ),
-    locationProfiles: BIBLE_SECTIONS.locationProfiles.validate(
-      requireSectionValue(raw, BIBLE_SECTIONS.locationProfiles.wireKey),
+    locations: BIBLE_SECTIONS.locations.validate(
+      requireSectionValue(raw, BIBLE_SECTIONS.locations.wireKey),
     ),
     threadRollups: BIBLE_SECTIONS.threadRollups.validate(
       requireSectionValue(raw, BIBLE_SECTIONS.threadRollups.wireKey),
@@ -413,7 +482,7 @@ export function fakeModelSections(): ModelSections {
     bookOverview: BIBLE_SECTIONS.bookOverview.fake(),
     world: BIBLE_SECTIONS.world.fake(),
     characterProfiles: BIBLE_SECTIONS.characterProfiles.fake(),
-    locationProfiles: BIBLE_SECTIONS.locationProfiles.fake(),
+    locations: BIBLE_SECTIONS.locations.fake(),
     threadRollups: BIBLE_SECTIONS.threadRollups.fake(),
     groups: BIBLE_SECTIONS.groups.fake(),
     itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.fake(),

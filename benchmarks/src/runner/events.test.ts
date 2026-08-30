@@ -400,7 +400,7 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
     bookOverview: "",
     world: [],
     characterProfiles: [],
-    locationProfiles: [],
+    locations: [],
     threadRollups: [],
     groups: [],
     itemsOfSignificance: [],

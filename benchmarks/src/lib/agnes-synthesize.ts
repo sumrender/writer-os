@@ -17,9 +17,19 @@ import {
   validateBible,
   type BibleSectionSpec,
 } from "./bible-sections.js";
+import {
+  validateLocationsGrounded,
+  type SectionGrounding,
+} from "./grounded-locations.js";
 import type { ModelSectionKey, ModelSections, StoryBible } from "./story-bible.js";
 import { storyBibleFromSections } from "./story-bible.js";
 import { deriveGraphData } from "./bible-graph.js";
+import {
+  coOccurrenceByLocation,
+  deriveLocationProfiles,
+  knownCharacterNames,
+  knownLocationNames,
+} from "./bible-locations.js";
 import type {
   SynthesisStrategy,
   SynthesizeBible,
@@ -360,9 +370,17 @@ export function createAgnesBibleSynthesizer(
     label: "bible",
   });
 
+/**
+   * One section's forced-tool call. The locations section (issue #17) is the
+   * only section that consults a grounding context; the registry validator
+   * stays pure-shape and the grounding-aware variant lives in
+   * `grounded-locations.ts`. The shape check is therefore applied uniformly
+   * via `spec.validate`; only locations additionally cross-checks the canon.
+   */
   const attemptSection = async <K extends ModelSectionKey>(
     spec: BibleSectionSpec<K>,
     user: string,
+    grounding?: SectionGrounding,
   ): Promise<ModelSections[K]> =>
     withRetry(log, `bible section ${spec.key}`, user, BIBLE_RETRY_INSTRUCTIONS, async (prompt) => {
       const payload = parseToolObject(
@@ -378,27 +396,33 @@ export function createAgnesBibleSynthesizer(
         ),
         "section",
       );
-      return spec.validate(payload["value"]);
+      const value = payload["value"];
+      if (spec.key === "locations" && grounding !== undefined) {
+        return validateLocationsGrounded(value, grounding) as ModelSections[K];
+      }
+      return spec.validate(value);
     });
 
-  const attemptMonolithic = async (user: string): Promise<ModelSections> =>
-    withRetry(log, "bible assembly", user, BIBLE_RETRY_INSTRUCTIONS, async (prompt) =>
-      validateBible(
-        parseToolObject(
-          firstForcedToolArguments(
-            await complete({
-              system: BIBLE_SYSTEM,
-              user: prompt,
-              tools: [BIBLE_TOOL],
-              forceToolName: BIBLE_TOOL_NAME,
-              temperature: 0,
-              maxTokens: SYNTHESIZE_MAX_TOKENS,
-            }),
-          ),
-          "bible",
+  const attemptMonolithic = async (user: string, grounding?: SectionGrounding): Promise<ModelSections> =>
+    withRetry(log, "bible assembly", user, BIBLE_RETRY_INSTRUCTIONS, async (prompt) => {
+      const payload = parseToolObject(
+        firstForcedToolArguments(
+          await complete({
+            system: BIBLE_SYSTEM,
+            user: prompt,
+            tools: [BIBLE_TOOL],
+            forceToolName: BIBLE_TOOL_NAME,
+            temperature: 0,
+            maxTokens: SYNTHESIZE_MAX_TOKENS,
+          }),
         ),
-      ),
-    );
+        "bible",
+      );
+      const sections = validateBible(payload);
+      if (grounding === undefined) return sections;
+      const rawLocations = payload[BIBLE_SECTIONS.locations.wireKey];
+      return { ...sections, locations: validateLocationsGrounded(rawLocations, grounding) };
+    });
 
   return async (input) => {
     const factsText = factsView(input.facts);
@@ -406,11 +430,19 @@ export function createAgnesBibleSynthesizer(
     const bookText = bookView(input.chapters);
     assertWithinContextWindow("bible synthesis", [BIBLE_SYSTEM, factsText, summariesText, bookText]);
 
+    const profiles = deriveLocationProfiles({ facts: input.facts, chapterTexts: input.chapters });
+    const grounding: SectionGrounding = {
+      knownLocationNames: knownLocationNames(input.facts),
+      knownCharacterNames: knownCharacterNames(input.facts),
+      coOccurrenceByLocation: coOccurrenceByLocation(profiles),
+    };
+
     const shared = { factsText, summariesText, bookText };
     let sections: ModelSections;
     if (strategy === "monolithic") {
       sections = await attemptMonolithic(
         bibleSynthesisUserPrompt({ ...shared, sectionsBlock: bibleMasterPrompt() }),
+        grounding,
       );
     } else {
       const sectionPrompt = (key: ModelSectionKey): string =>
@@ -425,9 +457,10 @@ export function createAgnesBibleSynthesizer(
           BIBLE_SECTIONS.characterProfiles,
           sectionPrompt("characterProfiles"),
         ),
-        locationProfiles: await attemptSection(
-          BIBLE_SECTIONS.locationProfiles,
-          sectionPrompt("locationProfiles"),
+        locations: await attemptSection(
+          BIBLE_SECTIONS.locations,
+          sectionPrompt("locations"),
+          grounding,
         ),
         threadRollups: await attemptSection(
           BIBLE_SECTIONS.threadRollups,
@@ -445,7 +478,10 @@ export function createAgnesBibleSynthesizer(
           BIBLE_SECTIONS.worldTimeline,
           sectionPrompt("worldTimeline"),
         ),
-        bookTimeline: await attemptSection(BIBLE_SECTIONS.bookTimeline, sectionPrompt("bookTimeline")),
+        bookTimeline: await attemptSection(
+          BIBLE_SECTIONS.bookTimeline,
+          sectionPrompt("bookTimeline"),
+        ),
       };
     }
 

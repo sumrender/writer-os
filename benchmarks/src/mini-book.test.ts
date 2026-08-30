@@ -157,7 +157,29 @@ describe("mini-book fixture", () => {
     // Placeholders: every model section ships valid and empty.
     expect(finalBible?.bookOverview).toBe("");
     expect(finalBible?.characterProfiles).toEqual([]);
-    expect(finalBible?.locationProfiles).toEqual([]);
+    // Locations are derived from location facts + chapter texts (issue #17).
+    const expectedLocations = [
+      {
+        name: "the northern light",
+        description: "",
+        significance: "",
+        charactersSeen: [
+          { character: "Mara Vey", firstCoOccurrenceOrdinal: 1 },
+          { character: "Joren Vey", firstCoOccurrenceOrdinal: 1 },
+        ],
+      },
+    ];
+    expect(finalBible?.locations).toEqual(expectedLocations);
+    // The locations snapshot is populated at every ordinal — ch1 already
+    // establishes both characters and the location, so ordinal 1 carries the
+    // full co-occurrence derivation. Issue #17 requires populated locations
+    // content at multiple ordinals, not just the final one.
+    const ordinal1Locations = bibleSnapshots[0]?.bible.locations;
+    expect(ordinal1Locations).toEqual(expectedLocations);
+    const ordinal2Locations = bibleSnapshots[1]?.bible.locations;
+    expect(ordinal2Locations).toEqual(expectedLocations);
+    const ordinal3Locations = bibleSnapshots[2]?.bible.locations;
+    expect(ordinal3Locations).toEqual(expectedLocations);
     // The derived graph: Mara Vey is mentioned 5 times, Joren Vey 4.
     expect(finalBible?.graph.nodes).toEqual([
       { name: "Mara Vey", importance: 5, role: "protagonist" },

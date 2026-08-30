@@ -18,6 +18,7 @@ import { applyFact, type ExtractedFact } from "./fact-merge.js";
 import { storyFacts } from "./fact-text.js";
 import { fakeModelSections } from "./bible-sections.js";
 import { deriveGraphData } from "./bible-graph.js";
+import { deriveLocationProfiles, type DeriveLocationProfiles } from "./bible-locations.js";
 
 /**
  * Rule-based deterministic pipeline fakes. The mini-book fixture
@@ -235,5 +236,44 @@ export const fakeSynthesizeChapterSummary: SynthesizeChapterSummary = async ({
   return { ordinal, summary };
 };
 
-export const fakeSynthesizeBible: SynthesizeBible = async ({ chapters, facts, summaries }) =>
-  storyBibleFromSections(fakeModelSections(), summaries, deriveGraphData({ facts, chapterTexts: chapters }));
+/**
+ * Options for the deterministic fake bible synthesizer. `deriveLocations`
+ * defaults to the production derivation so the fake matches the real
+ * synthesizer's contract by default; tests that want the registry-uniform
+ * placeholder behavior (every section is `BIBLE_SECTIONS.x.fake()`) inject
+ * a deriver that returns `[]`.
+ */
+export interface FakeSynthesizeBibleOptions {
+  readonly deriveLocations?: DeriveLocationProfiles;
+}
+
+/**
+ * Deterministic fake bible synthesizer: seeds every model section via the
+ * registry's `fake()` and replaces `locations` with the grounding
+ * derivation. Mirrors the real synthesizer's contract — both always ground
+ * their locations when the canon establishes places (Liskov: same inputs →
+ * same shape).
+ */
+export function createFakeSynthesizeBible(
+  options: FakeSynthesizeBibleOptions = {},
+): SynthesizeBible {
+  const deriveLocations = options.deriveLocations ?? deriveLocationProfiles;
+  return async ({ chapters, facts, summaries }) => {
+    const sections = fakeModelSections();
+    return storyBibleFromSections(
+      {
+        ...sections,
+        locations: deriveLocations({ facts, chapterTexts: chapters }),
+      },
+      summaries,
+      deriveGraphData({ facts, chapterTexts: chapters }),
+    );
+  };
+}
+
+/**
+ * Default-configured deterministic fake bible synthesizer. Mirrors the
+ * production synthesizer's contract: every section is registry-faked and
+ * `locations` is grounded via `deriveLocationProfiles`.
+ */
+export const fakeSynthesizeBible: SynthesizeBible = createFakeSynthesizeBible();

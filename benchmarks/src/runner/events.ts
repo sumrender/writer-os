@@ -13,6 +13,8 @@ import type {
   BibleSnapshot,
   ChapterSummaryEntry,
   GraphData,
+  LocationCharacterSeen,
+  LocationProfile,
   StoryBible,
 } from "../lib/story-bible.js";
 import { SYNTHESIS_STRATEGIES, type SynthesisStrategy } from "../lib/pipeline.js";
@@ -43,6 +45,8 @@ export type {
   GraphData,
   GraphNode,
   GraphEdge,
+  LocationProfile,
+  LocationCharacterSeen,
 } from "../lib/story-bible.js";
 export type { SynthesisStrategy } from "../lib/pipeline.js";
 export type { ExtractionAxisReport, KindReport, SweepReport } from "./axes/extraction-axis.js";
@@ -333,6 +337,26 @@ const parseProfile: Parser<StoryBible["characterProfiles"][number]> = recordWith
   return name !== null && profile !== null ? { name, profile } : null;
 });
 
+const parseLocationCharacterSeen: Parser<LocationCharacterSeen> = recordWith((r) => {
+  const character = required(r, "character", parseNonEmptyString);
+  const firstCoOccurrenceOrdinal = required(r, "firstCoOccurrenceOrdinal", parsePositiveInt);
+  return character !== null && firstCoOccurrenceOrdinal !== null
+    ? { character, firstCoOccurrenceOrdinal }
+    : null;
+});
+
+const parseLocationProfile: Parser<LocationProfile> = recordWith((r) => {
+  const name = required(r, "name", parseNonEmptyString);
+  const description = required(r, "description", parseString);
+  const significance = required(r, "significance", parseString);
+  const charactersSeen = required(r, "charactersSeen", (v) =>
+    parseArray(v, parseLocationCharacterSeen),
+  );
+  return name !== null && description !== null && significance !== null && charactersSeen !== null
+    ? { name, description, significance, charactersSeen }
+    : null;
+});
+
 const parseThreadRollup: Parser<StoryBible["threadRollups"][number]> = recordWith((r) => {
   const thread = required(r, "thread", parseNonEmptyString);
   const status = required(r, "status", parseThreadStatus);
@@ -388,7 +412,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
   const bookOverview = required(r, "bookOverview", parseString);
   const world = required(r, "world", (v) => parseArray(v, parseWorldNote));
   const characterProfiles = required(r, "characterProfiles", (v) => parseArray(v, parseProfile));
-  const locationProfiles = required(r, "locationProfiles", (v) => parseArray(v, parseProfile));
+  const locations = required(r, "locations", (v) => parseArray(v, parseLocationProfile));
   const threadRollups = required(r, "threadRollups", (v) => parseArray(v, parseThreadRollup));
   const groups = required(r, "groups", (v) => parseArray(v, parseNamedDescription));
   const itemsOfSignificance = required(r, "itemsOfSignificance", (v) =>
@@ -405,7 +429,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
     bookOverview === null ||
     world === null ||
     characterProfiles === null ||
-    locationProfiles === null ||
+    locations === null ||
     threadRollups === null ||
     groups === null ||
     itemsOfSignificance === null ||
@@ -423,7 +447,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
     bookOverview,
     world,
     characterProfiles,
-    locationProfiles,
+    locations,
     threadRollups,
     groups,
     itemsOfSignificance,

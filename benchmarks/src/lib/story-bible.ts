@@ -1,13 +1,38 @@
 import type { ThreadStatus } from "./story-facts.js";
 
 /**
- * Story Bible shape (issue #14): the synthesized, author-facing document
- * distilled from the graded Story Facts store and the chapter texts
+ * Story Bible shape (issue #14, refined in #17): the synthesized, author-facing
+ * document distilled from the graded Story Facts store and the chapter texts
  * (ADR-0007: two-layer canon). Twelve *model* sections are produced by the
  * Synthesize port; two members are derived, never modeled —
  * `chapterSummaries` is carried from the synthesis inputs and `graph` is the
  * deterministic derivation in `bible-graph.ts`.
  */
+
+/**
+ * One character established as having appeared at a location, with the
+ * chapter ordinal of their first co-occurrence in the source text. The
+ * derivation in `bible-locations.ts` is the single source of truth for the
+ * ordinal; the wire validator here only confirms its shape and that the
+ * character name is one the canon establishes.
+ */
+export interface LocationCharacterSeen {
+  readonly character: string;
+  readonly firstCoOccurrenceOrdinal: number;
+}
+
+/**
+ * One location's bible entry (issue #17): description, narrative significance,
+ * and the characters established as having appeared there with the ordinal of
+ * first co-occurrence. The validator rejects invented places and characters
+ * never seen at the location in the chapter texts.
+ */
+export interface LocationProfile {
+  readonly name: string;
+  readonly description: string;
+  readonly significance: string;
+  readonly charactersSeen: readonly LocationCharacterSeen[];
+}
 
 export interface WorldNote {
   readonly topic: string;
@@ -51,7 +76,13 @@ export interface ModelSections {
   readonly bookOverview: string;
   readonly world: readonly WorldNote[];
   readonly characterProfiles: readonly ProfileEntry[];
-  readonly locationProfiles: readonly ProfileEntry[];
+  /**
+   * Per-location bible entries (issue #17): description, narrative
+   * significance, and characters seen at the location with the ordinal of
+   * first co-occurrence. Every entry is grounded in the location facts and
+   * the chapter texts — the registry validator refuses invented places.
+   */
+  readonly locations: readonly LocationProfile[];
   readonly threadRollups: readonly ThreadRollup[];
   readonly groups: readonly NamedDescription[];
   readonly itemsOfSignificance: readonly NamedDescription[];
@@ -109,7 +140,7 @@ export function emptyStoryBible(): StoryBible {
     bookOverview: "",
     world: [],
     characterProfiles: [],
-    locationProfiles: [],
+    locations: [],
     threadRollups: [],
     groups: [],
     itemsOfSignificance: [],

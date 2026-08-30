@@ -53,7 +53,14 @@ const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
   bookOverview: "An overview.",
   world: [{ topic: "the light", note: "burns without oil" }],
   characterProfiles: ["Bare Name"],
-  locationProfiles: [{ name: "the light", profile: "A lighthouse." }],
+  locations: [
+    {
+      name: "the light",
+      description: "A lighthouse.",
+      significance: "Anchors the keeper's daily round.",
+      charactersSeen: [],
+    },
+  ],
   threadRollups: [{ thread: "the ledger", status: "open", rollup: "r" }],
   groups: [],
   itemsOfSignificance: [{ name: "brass compass", description: "Points wrong." }],
@@ -72,7 +79,10 @@ const BIBLE_INPUT = (): {
   summaries: readonly { readonly ordinal: number; readonly summary: string }[];
 } => ({
   chapters: ["Chapter one text.", "Chapter two text."],
-  facts: emptyStoryFacts(),
+  facts: {
+    ...emptyStoryFacts(),
+    locations: [{ name: "the light" }],
+  },
   summaries: [
     { ordinal: 1, summary: "One." },
     { ordinal: 2, summary: "Two." },
@@ -230,7 +240,7 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
         book_overview: "An overview.",
         world: [],
         character_profiles: [],
-        location_profiles: [],
+        locations: [],
         thread_rollups: [],
         groups: [],
         items_of_significance: [],
@@ -277,7 +287,7 @@ describe("synthesis response cache", () => {
         book_overview: "An overview.",
         world: [],
         character_profiles: [],
-        location_profiles: [],
+        locations: [],
         thread_rollups: [],
         groups: [],
         items_of_significance: [],
