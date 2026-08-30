@@ -236,4 +236,8 @@ export const fakeSynthesizeChapterSummary: SynthesizeChapterSummary = async ({
 };
 
 export const fakeSynthesizeBible: SynthesizeBible = async ({ chapters, facts, summaries }) =>
-  storyBibleFromSections(fakeModelSections(), summaries, deriveGraphData({ facts, chapterTexts: chapters }));
+  storyBibleFromSections(
+    fakeModelSections({ facts, chapterSummaries: summaries }),
+    summaries,
+    deriveGraphData({ facts, chapterTexts: chapters }),
+  );
