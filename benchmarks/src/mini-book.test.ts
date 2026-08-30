@@ -245,6 +245,17 @@ describe("mini-book fixture", () => {
         note: 'Canon establishes "the northern light burns without oil", which real-world (earth) rules do not allow.',
       },
     ]);
+    // World timeline (issue #18): all events are stated (directly from
+    // prose), in narration order.
+    expect(finalBible?.worldTimeline).toEqual([
+      { event: "the harbor bell rang", grounding: "stated" },
+      { event: "the ledger burned", grounding: "stated" },
+    ]);
+    // Book timeline (issue #18): events mapped to the ordinals that reveal them.
+    expect(finalBible?.bookTimeline).toEqual([
+      { ordinal: 1, events: ["the harbor bell rang"] },
+      { ordinal: 3, events: ["the ledger burned"] },
+    ]);
     // The derived graph: Mara Vey is mentioned 5 times, Joren Vey 4.
     expect(finalBible?.graph.nodes).toEqual([
       { name: "Mara Vey", importance: 5, role: "protagonist" },

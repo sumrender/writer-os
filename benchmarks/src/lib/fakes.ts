@@ -4,7 +4,7 @@ import {
   type StoryFacts,
   type ThreadStatus,
 } from "./story-facts.js";
-import { emptyStoryBible, storyBibleFromSections } from "./story-bible.js";
+import { emptyStoryBible, storyBibleFromSections, type BookTimelineEntry, type WorldTimelineEvent } from "./story-bible.js";
 import type {
   Check,
   CheckResult,
@@ -248,11 +248,42 @@ export interface FakeSynthesizeBibleOptions {
 }
 
 /**
+ * Build the world timeline from the story facts. All events in the fake
+ * grammar are directly grounded in prose ("It happened that…"), so they
+ * are all `stated`. The order is the narration (read) order since the fake
+ * cannot do semantic in-world reordering — a real model would.
+ */
+function buildFakeWorldTimeline(facts: StoryFacts): readonly WorldTimelineEvent[] {
+  return facts.timeline.map((event) => ({ event, grounding: "stated" as const }));
+}
+
+/**
+ * Build the book timeline by extracting per-chapter timeline events from
+ * each chapter's text using the same fact parser, then mapping them to
+ * the chapter's ordinal in narration order.
+ */
+function buildFakeBookTimeline(chapters: readonly string[]): readonly BookTimelineEntry[] {
+  const entries: BookTimelineEntry[] = [];
+  for (let i = 0; i < chapters.length; i++) {
+    const chapterText = chapters[i];
+    if (chapterText === undefined) continue;
+    const events = parseFacts(chapterText)
+      .filter((f): f is ExtractedFact & { kind: "timeline" } => f.kind === "timeline")
+      .map((f) => f.event);
+    if (events.length > 0) {
+      entries.push({ ordinal: i + 1, events });
+    }
+  }
+  return entries;
+}
+
+/**
  * Deterministic fake bible synthesizer: seeds every model section via the
- * registry's canon-seen `fake()` and replaces `locations` with the grounding
- * derivation. Mirrors the real synthesizer's contract — both always ground
- * their locations when the canon establishes places (Liskov: same inputs →
- * same shape).
+ * registry's canon-seen `fake()`, replaces `locations` with the grounding
+ * derivation, and populates the timelines (issue #18) from the facts and
+ * chapter texts — the registry fakes ship valid empty placeholders. Mirrors
+ * the real synthesizer's contract — both always ground their locations when
+ * the canon establishes places (Liskov: same inputs → same shape).
  */
 export function createFakeSynthesizeBible(
   options: FakeSynthesizeBibleOptions = {},
@@ -264,6 +295,8 @@ export function createFakeSynthesizeBible(
       {
         ...sections,
         locations: deriveLocations({ facts, chapterTexts: chapters }),
+        worldTimeline: buildFakeWorldTimeline(facts),
+        bookTimeline: buildFakeBookTimeline(chapters),
       },
       summaries,
       deriveGraphData({ facts, chapterTexts: chapters }),

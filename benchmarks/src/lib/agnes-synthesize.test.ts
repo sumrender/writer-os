@@ -80,8 +80,8 @@ const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
   lexiconNotes: [],
   openLoops: [{ description: "Who burned it?", openedAtOrdinal: 1 }],
   styleRollup: [{ field: "narration", value: "close third" }],
-  worldTimeline: ["event one"],
-  bookTimeline: ["event two"],
+  worldTimeline: [{ event: "event one", grounding: "stated" }],
+  bookTimeline: [{ ordinal: 1, events: ["event two"] }],
 };
 
 /** The canon-grounded profile the synthesizer must produce for BIBLE_INPUT. */

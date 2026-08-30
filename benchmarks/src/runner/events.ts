@@ -472,6 +472,18 @@ const parseGraphData: Parser<GraphData> = recordWith((r) => {
   return nodes !== null && edges !== null ? { nodes, edges } : null;
 });
 
+const parseWorldTimelineEvent: Parser<StoryBible["worldTimeline"][number]> = recordWith((r) => {
+  const event = required(r, "event", parseNonEmptyString);
+  const grounding = required(r, "grounding", oneOf(["stated", "inferred"] as const));
+  return event !== null && grounding !== null ? { event, grounding } : null;
+});
+
+const parseBookTimelineEntry: Parser<StoryBible["bookTimeline"][number]> = recordWith((r) => {
+  const ordinal = required(r, "ordinal", parsePositiveInt);
+  const events = required(r, "events", (v) => parseArray(v, parseString));
+  return ordinal !== null && events !== null ? { ordinal, events } : null;
+});
+
 const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
   const bookOverview = required(r, "bookOverview", parseString);
   const world = required(r, "world", parseWorldSection);
@@ -487,8 +499,8 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
   const lexiconNotes = required(r, "lexiconNotes", (v) => parseArray(v, parseLexiconNote));
   const openLoops = required(r, "openLoops", (v) => parseArray(v, parseOpenLoop));
   const styleRollup = required(r, "styleRollup", (v) => parseArray(v, parseStyleField));
-  const worldTimeline = required(r, "worldTimeline", (v) => parseArray(v, parseNonEmptyString));
-  const bookTimeline = required(r, "bookTimeline", (v) => parseArray(v, parseNonEmptyString));
+  const worldTimeline = required(r, "worldTimeline", (v) => parseArray(v, parseWorldTimelineEvent));
+  const bookTimeline = required(r, "bookTimeline", (v) => parseArray(v, parseBookTimelineEntry));
   const chapterSummaries = required(r, "chapterSummaries", (v) => parseArray(v, parseChapterSummary));
   const graph = required(r, "graph", parseGraphData);
   if (

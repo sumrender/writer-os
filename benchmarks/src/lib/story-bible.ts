@@ -117,6 +117,23 @@ export interface StyleField {
   readonly value: string;
 }
 
+/** Grounding of a world-timeline event: `stated` when directly in canon prose, `inferred` when synthesized from ordering/backstory. */
+export type TimelineGrounding = "stated" | "inferred";
+
+export const TIMELINE_GROUNDINGS: readonly TimelineGrounding[] = ["stated", "inferred"];
+
+/** One event on the world (in-world) timeline. */
+export interface WorldTimelineEvent {
+  readonly event: string;
+  readonly grounding: TimelineGrounding;
+}
+
+/** One entry on the book (narration) timeline, mapping a chapter ordinal to the events revealed in that chapter. */
+export interface BookTimelineEntry {
+  readonly ordinal: number;
+  readonly events: readonly string[];
+}
+
 /** The sections the Synthesize port models and validates. */
 export interface ModelSections {
   readonly bookOverview: string;
@@ -135,8 +152,8 @@ export interface ModelSections {
   readonly lexiconNotes: readonly LexiconNote[];
   readonly openLoops: readonly OpenLoop[];
   readonly styleRollup: readonly StyleField[];
-  readonly worldTimeline: readonly string[];
-  readonly bookTimeline: readonly string[];
+  readonly worldTimeline: readonly WorldTimelineEvent[];
+  readonly bookTimeline: readonly BookTimelineEntry[];
 }
 
 export type ModelSectionKey = keyof ModelSections;
