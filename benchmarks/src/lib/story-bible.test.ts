@@ -95,8 +95,10 @@ describe("section registry", () => {
       if (key === "bookOverview") {
         expect(schema).toEqual({ type: "string" });
       } else if (key === "world") {
-        expect(schema.type).toBe("object");
-        expect(Object.keys((schema as { properties: object }).properties)).toEqual([
+        if (schema.type !== "object") {
+          throw new Error("world wire schema must be an object section");
+        }
+        expect(Object.keys(schema.properties ?? {})).toEqual([
           "classification",
           "description",
           "rules",

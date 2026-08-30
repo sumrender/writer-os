@@ -1,5 +1,6 @@
 import { isPlainObject, nonEmptyString, positiveInt } from "./schema-primitives.js";
 import { failSection } from "./section-errors.js";
+import type { SectionWireSchema } from "./section-wire.js";
 import { THREAD_STATUSES, type ThreadStatus, type StoryFacts } from "./story-facts.js";
 import type { BibleSynthesisInput } from "./pipeline.js";
 import {
@@ -30,15 +31,12 @@ import type {
  * edits a stable core per section (CODING_STANDARDS §3.2).
  */
 
-/** Tool-schema shape of one section's value on the synthesis wire. */
-export type SectionWireSchema =
-  | { readonly type: "string"; readonly enum?: readonly string[] }
-  | { readonly type: "array"; readonly items: SectionWireSchema }
-  | {
-      readonly type: "object";
-      readonly properties?: { readonly [key: string]: SectionWireSchema };
-      readonly required?: readonly string[];
-    };
+/**
+ * Tool-schema shape of one section's value on the synthesis wire. Lives in
+ * `section-wire.ts` so section modules (e.g. World) can type their schema
+ * against it without importing this module's values back (one-way deps).
+ */
+export type { SectionWireSchema } from "./section-wire.js";
 
 export interface BibleSectionSpec<K extends ModelSectionKey> {
   readonly key: K;

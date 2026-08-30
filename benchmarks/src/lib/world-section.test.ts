@@ -110,6 +110,49 @@ describe("validateWorld — shape", () => {
 });
 
 describe("validateWorld — canon support", () => {
+  it("rejects a deviating rule that only partially echoes a canon world rule", () => {
+    // One-directional traceability: the rule must contain the canon topic, so
+    // a truncated fabrication ("light") cannot pass as supporting it.
+    expect(() =>
+      validateWorld(
+        {
+          classification: "hybrid",
+          description: "d",
+          rules: [{ rule: "light", relation: "deviates_from_earth", note: "" }],
+        },
+        CANON_WITH_RULES,
+      ),
+    ).toThrow(/no canon world rule supports it/);
+  });
+
+  it("rejects a non-earth classification with an empty description", () => {
+    expect(() =>
+      validateWorld(
+        {
+          classification: "hybrid",
+          description: "",
+          rules: [
+            { rule: "the northern light burns without oil", relation: "deviates_from_earth", note: "" },
+          ],
+        },
+        CANON_WITH_RULES,
+      ),
+    ).toThrow(/"description" must be non-empty for a "hybrid" classification/);
+  });
+
+  it("rejects a non-earth classification with no deviating rule to rest on", () => {
+    expect(() =>
+      validateWorld(
+        {
+          classification: "supernatural",
+          description: "Ghosts walk the harbor.",
+          rules: [{ rule: "tides turn twice daily", relation: "same_as_earth", note: "" }],
+        },
+        CANON_WITH_RULES,
+      ),
+    ).toThrow(/classification "supernatural" requires at least one rule deviating from earth rules/);
+  });
+
   it("rejects a fantasy classification on a realist canon with no world rules", () => {
     expect(() =>
       validateWorld(
@@ -230,6 +273,17 @@ describe("fakeWorld", () => {
   it("derives a fantasy classification when deviations have no earth anchors", () => {
     const world = fakeWorld(inputWith({ facts: CANON_WITH_RULES }));
     expect(world.classification).toBe("fantasy");
+  });
+
+  it("derives a supernatural classification for occult deviations in an earth-like world", () => {
+    const canon: StoryFacts = {
+      ...emptyStoryFacts(),
+      characters: [{ name: "Mara Vey" }],
+      worldRules: [{ topic: "ghosts walk the harbor at midnight" }],
+    };
+    const world = fakeWorld(inputWith({ facts: canon }));
+    expect(world.classification).toBe("supernatural");
+    expect(() => validateWorld(world, canon)).not.toThrow();
   });
 
   it("is deterministic across runs", () => {

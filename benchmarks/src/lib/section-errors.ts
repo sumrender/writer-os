@@ -8,7 +8,7 @@
 
 const SNIPPET_MAX = 160;
 
-export function snippet(raw: unknown): string {
+function snippet(raw: unknown): string {
   let text: string;
   try {
     text = raw === undefined ? "undefined" : (JSON.stringify(raw) ?? String(raw));

@@ -10,7 +10,7 @@ import {
   type WorldRuleRelation,
   type WorldSection,
 } from "./story-bible.js";
-import type { SectionWireSchema } from "./bible-sections.js";
+import type { SectionWireSchema } from "./section-wire.js";
 
 /**
  * The World slice of the Story Bible (issue #16): classification
@@ -27,14 +27,14 @@ function normalize(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** A canon world rule supports a deviating rule when either text contains
- * the other (case/whitespace-insensitive) — the model may quote the topic or
- * wrap it in prose, but may not replace it. */
+/** A canon world rule supports a deviating rule only when the emitted rule
+ * actually quotes or wraps the canon topic (case/whitespace-insensitive): the
+ * model may dress the topic in prose but may not replace or truncate it. */
 function supportedByCanon(rule: string, canon: StoryFacts): boolean {
-  const needle = normalize(rule);
+  const haystack = normalize(rule);
   return canon.worldRules.some((entry) => {
     const topic = normalize(entry.topic);
-    return topic.length > 0 && (needle.includes(topic) || topic.includes(needle));
+    return topic.length > 0 && haystack.includes(topic);
   });
 }
 
@@ -94,13 +94,33 @@ export function validateWorld(raw: unknown, canon: StoryFacts): WorldSection {
     failSection(where, `"rules" must be an array of {rule, relation, note} objects`, raw);
   }
   const rules = rulesRaw.map((entry, index) => parseWorldRuleEntry(where, entry, index));
+  const description = typeof descriptionRaw === "string" ? descriptionRaw : "";
 
-  if (classification !== "earth" && canon.worldRules.length === 0) {
-    failSection(
-      where,
-      `classification "${classification}" is unsupported — canon establishes no world rules deviating from real-world (earth) rules`,
-      raw,
-    );
+  if (classification !== "earth") {
+    if (canon.worldRules.length === 0) {
+      failSection(
+        where,
+        `classification "${classification}" is unsupported — canon establishes no world rules deviating from real-world (earth) rules`,
+        raw,
+      );
+    }
+    // A classified world must be described and carry the deviating rule(s)
+    // the classification rests on (issue #16: present and non-empty once the
+    // world is established).
+    if (!nonEmptyString(description)) {
+      failSection(
+        where,
+        `"description" must be non-empty for a "${classification}" classification`,
+        raw,
+      );
+    }
+    if (!rules.some((entry) => entry.relation === "deviates_from_earth")) {
+      failSection(
+        where,
+        `classification "${classification}" requires at least one rule deviating from earth rules`,
+        raw,
+      );
+    }
   }
   for (const entry of rules) {
     if (entry.relation !== "deviates_from_earth") continue;
@@ -115,7 +135,7 @@ export function validateWorld(raw: unknown, canon: StoryFacts): WorldSection {
       );
     }
   }
-  return { classification, description: typeof descriptionRaw === "string" ? descriptionRaw : "", rules };
+  return { classification, description, rules };
 }
 
 /** The wire shape of one world rule entry. */
@@ -140,15 +160,57 @@ export const WORLD_WIRE_SCHEMA = {
   required: ["classification", "description", "rules"],
 } as const satisfies SectionWireSchema;
 
-/** The per-section prompt instruction block for the World section. */
-export const WORLD_INSTRUCTION =
-  "world: the story's world as established by canon — its classification (one of earth, fantasy, supernatural, hybrid), a description, and the world's rules each stated in relation to real-world (earth) rules (relation is one of same_as_earth, deviates_from_earth). Value: an object {classification, description, rules:[{rule, relation, note}]}. Classify non-earth only when canon establishes world rules that deviate from real-world rules; never invent rules the canon does not support. When canon establishes nothing, emit {classification: \"earth\", description: \"\", rules: []}.";
+/** The per-section prompt instruction block for the World section. The enum
+ * vocabularies are interpolated from the shared constants, never re-spelled
+ * (CODING_STANDARDS §2.1). */
+export const WORLD_INSTRUCTION = [
+  "world: the story's world as established by canon — its classification (one of",
+  `${WORLD_CLASSIFICATIONS.join(", ")}), a description, and the world's rules each stated in relation to`,
+  `real-world (earth) rules (relation is one of ${WORLD_RULE_RELATIONS.join(", ")}).`,
+  "Value: an object {classification, description, rules:[{rule, relation, note}]}.",
+  "Classify non-earth only when canon establishes world rules that deviate from",
+  "real-world rules; never invent rules the canon does not support. When canon",
+  'establishes no deviating rule, classify the world "earth" and state its',
+  'relation to real-world rules (or emit {classification: "earth", description: "",',
+  'rules: []} if the world is not yet established at all).',
+].join(" ");
+
+/** Occult vocabulary the fake uses to tell a supernatural world apart from a
+ * merely rule-bending hybrid one. A deterministic keyword heuristic — the
+ * real classification is the vendor synthesizer's judgment, graded by the
+ * judge, not by this reference fake. */
+const SUPERNATURAL_MARKERS = [
+  "magic",
+  "magical",
+  "ghost",
+  "witch",
+  "spell",
+  "curse",
+  "cursed",
+  "undead",
+  "spirit",
+  "supernatural",
+  "sorcery",
+  "necro",
+] as const;
+
+function hasSupernaturalMarker(topics: readonly string[]): boolean {
+  const text = topics.join(" ").toLowerCase();
+  return SUPERNATURAL_MARKERS.some((marker) => text.includes(marker));
+}
 
 /**
  * Deterministic fake: derives the world from the synthesis inputs — one
  * deviating rule per canon world rule, an earth-baseline rule when canon
  * establishes none, and a description composed only from established
  * settings and world rules. Invents nothing: every claim traces to a fact.
+ *
+ * Classification ladder (all inputs are canon, so no class is ever asserted
+ * without a supporting world rule): earth when canon establishes no deviating
+ * rule; fantasy when the deviations sit in a wholly invented world (no
+ * earth-like character/location/item anchors); supernatural when an earth-like
+ * world's deviations are occult; hybrid otherwise (earth-like world bending
+ * real rules without going full occult).
  */
 export function fakeWorld(input: BibleSynthesisInput): WorldSection {
   const { facts, summaries } = input;
@@ -157,7 +219,13 @@ export function fakeWorld(input: BibleSynthesisInput): WorldSection {
     facts.characters.length > 0 || facts.locations.length > 0 || facts.items.length > 0;
 
   const classification: WorldClassification =
-    topics.length === 0 ? "earth" : hasEarthAnchors ? "hybrid" : "fantasy";
+    topics.length === 0
+      ? "earth"
+      : !hasEarthAnchors
+        ? "fantasy"
+        : hasSupernaturalMarker(topics)
+          ? "supernatural"
+          : "hybrid";
 
   const rules: WorldRule[] =
     topics.length === 0
