@@ -27,7 +27,7 @@ function bibleOf(overview: string): StoryBible {
     bookOverview: overview,
     world: { classification: "earth", description: "", rules: [] },
     characterProfiles: [],
-    locationProfiles: [],
+    locations: [],
     threadRollups: [],
     groups: [],
     itemsOfSignificance: [],

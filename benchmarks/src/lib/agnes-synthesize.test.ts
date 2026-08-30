@@ -66,7 +66,14 @@ const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
   // facts, ordinals within the summaries' range. Missing prose aspects are
   // normalized to "" by the validator — asserted below.
   characterProfiles: [{ name: "Mara Vey", firstAppearanceOrdinal: 1, mentionOrdinals: [1, 2] }],
-  locationProfiles: [{ name: "the light", profile: "A lighthouse." }],
+  locations: [
+    {
+      name: "the light",
+      description: "A lighthouse.",
+      significance: "Anchors the keeper's daily round.",
+      charactersSeen: [],
+    },
+  ],
   threadRollups: [{ thread: "the ledger", status: "open", rollup: "r" }],
   groups: [],
   itemsOfSignificance: [{ name: "brass compass", description: "Points wrong." }],
@@ -102,6 +109,7 @@ const BIBLE_INPUT = (): {
     ...emptyStoryFacts(),
     characters: [{ name: "Mara Vey" }],
     relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
+    locations: [{ name: "the light" }],
   },
   summaries: [
     { ordinal: 1, summary: "One." },
@@ -268,7 +276,7 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
         book_overview: "An overview.",
         world: { classification: "earth", description: "", rules: [] },
         character_profiles: [MARA_PROFILE],
-        location_profiles: [],
+        locations: [],
         thread_rollups: [],
         groups: [],
         items_of_significance: [],
@@ -317,7 +325,7 @@ describe("synthesis response cache", () => {
         book_overview: "An overview.",
         world: { classification: "earth", description: "", rules: [] },
         character_profiles: [MARA_PROFILE],
-        location_profiles: [],
+        locations: [],
         thread_rollups: [],
         groups: [],
         items_of_significance: [],

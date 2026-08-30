@@ -68,7 +68,14 @@ const VALID_PAYLOAD = {
       ],
     },
   ],
-  location_profiles: [{ name: "the northern light", profile: "A lighthouse." }],
+  locations: [
+    {
+      name: "the northern light",
+      description: "A lighthouse.",
+      significance: "Anchors the keeper's daily round.",
+      charactersSeen: [],
+    },
+  ],
   thread_rollups: [
     { thread: "the missing ledger", status: "resolved", rollup: "Found and burned." },
   ],
@@ -99,7 +106,7 @@ describe("section registry", () => {
       expect(BIBLE_SECTIONS[key].instruction).not.toBe("");
     }
     expect(MODEL_SECTION_KEYS).toContain("bookOverview");
-    expect(MODEL_SECTION_KEYS).toContain("locationProfiles");
+    expect(MODEL_SECTION_KEYS).toContain("locations");
   });
 
   it("ships valid empty placeholders per section, World deriving from the canon", () => {
@@ -116,7 +123,7 @@ describe("section registry", () => {
     expect(sections.characterProfiles.map((p) => p.name)).toEqual(["Mara Vey"]);
     expect(sections.characterProfiles[0]?.mentionOrdinals).toEqual([1]);
     // Every other section the canon establishes nothing for stays empty.
-    expect(sections.locationProfiles).toEqual([]);
+    expect(sections.locations).toEqual([]);
   });
 
   it("marks bookOverview a string section, World an object section, the rest arrays", () => {
@@ -185,8 +192,8 @@ describe("per-section trust boundary (via the registry validators)", () => {
   });
 
   it("tolerates an explicit null secondary field as the empty string", () => {
-    expect(BIBLE_SECTIONS.locationProfiles.validate([{ name: "the light", profile: null }], CANON)).toEqual([
-      { name: "the light", profile: "" },
+    expect(BIBLE_SECTIONS.groups.validate([{ name: "Keepers", description: null }], CANON)).toEqual([
+      { name: "Keepers", description: "" },
     ]);
   });
 
@@ -257,7 +264,7 @@ describe("validateBible — monolithic trust boundary", () => {
       bookOverview: VALID_PAYLOAD.book_overview,
       world: VALID_PAYLOAD.world,
       characterProfiles: VALID_PAYLOAD.character_profiles,
-      locationProfiles: VALID_PAYLOAD.location_profiles,
+      locations: VALID_PAYLOAD.locations,
       threadRollups: VALID_PAYLOAD.thread_rollups,
       groups: VALID_PAYLOAD.groups,
       itemsOfSignificance: VALID_PAYLOAD.items_of_significance,

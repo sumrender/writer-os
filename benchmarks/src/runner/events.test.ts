@@ -400,7 +400,7 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
     bookOverview: "",
     world: { classification: "earth", description: "", rules: [] },
     characterProfiles: [],
-    locationProfiles: [],
+    locations: [],
     threadRollups: [],
     groups: [],
     itemsOfSignificance: [],
@@ -680,19 +680,42 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
     ).toBeNull();
   });
 
-  it("keeps location profiles on the simple {name, profile} wire shape", () => {
+  it("parses location profiles with the grounded charactersSeen shape (issue #17)", () => {
     const located = {
       ...chapterWithProfiles,
       bible: {
         ...emptyBible,
-        locationProfiles: [{ name: "the northern light", profile: "A lighthouse." }],
+        locations: [
+          {
+            name: "the northern light",
+            description: "A lighthouse.",
+            significance: "Anchors the keeper's daily round.",
+            charactersSeen: [{ character: "Mara Vey", firstCoOccurrenceOrdinal: 1 }],
+          },
+        ],
       },
     };
     expect(parseBenchmarkEvent(located)?.type).toBe("chapter.completed");
     expect(
       parseBenchmarkEvent({
         ...located,
-        bible: { ...emptyBible, locationProfiles: [{ name: "the northern light" }] },
+        bible: { ...emptyBible, locations: [{ name: "the northern light" }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...located,
+        bible: {
+          ...emptyBible,
+          locations: [
+            {
+              name: "the northern light",
+              description: "A lighthouse.",
+              significance: "Anchors the keeper's daily round.",
+              charactersSeen: [{ character: "Mara Vey" }],
+            },
+          ],
+        },
       }),
     ).toBeNull();
   });

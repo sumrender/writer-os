@@ -203,9 +203,9 @@ describe("fakeSynthesizeChapterSummary", () => {
 });
 
 describe("fakeSynthesizeBible", () => {
-  it("carries the summaries, derives the graph, and populates character profiles from canon", async () => {
+  it("carries the summaries, derives the graph, populates character profiles from canon, and seeds Locations from facts (issue #17)", async () => {
     const chapters = [
-      "Introducing Mara Vey, keeper of the northern light.",
+      "Introducing Mara Vey, keeper of the northern light.\nThe scene is set in the northern light.",
       "Introducing Joren Vey, once keeper before her.",
     ];
     const facts = await fakeExtract(chapters.join("\n"), 2, emptyStoryFacts());
@@ -217,8 +217,12 @@ describe("fakeSynthesizeBible", () => {
     const bible = await fakeSynthesizeBible({ chapters, facts, summaries });
 
     expect(bible.chapterSummaries).toEqual(summaries);
-    const { chapterSummaries: _carried, graph, ...sections } = bible;
-    expect(sections).toEqual(fakeModelSections({ facts, chapterSummaries: summaries }));
+    const { chapterSummaries: _carried, graph, locations: _locations, ...sections } = bible;
+    const { locations: _fakeLocations, ...fakeWithoutLocations } = fakeModelSections({
+      facts,
+      chapterSummaries: summaries,
+    });
+    expect(sections).toEqual(fakeWithoutLocations);
     // Character profiles are canon-grounded: appearance/traits from facts,
     // mention ordinals from whole-name scans over the summaries. Canon here
     // establishes only names, so every prose aspect stays empty.
@@ -248,12 +252,33 @@ describe("fakeSynthesizeBible", () => {
     ]);
     // Sections the canon establishes nothing for stay empty placeholders.
     expect(bible.bookOverview).toBe("");
-    expect(bible.locationProfiles).toEqual([]);
     expect(bible.threadRollups).toEqual([]);
+    // Mara is named alongside the location in ch1; Joren is not — no co-occurrence.
+    expect(bible.locations).toEqual([
+      {
+        name: "the northern light",
+        description: "",
+        significance: "",
+        charactersSeen: [{ character: "Mara Vey", firstCoOccurrenceOrdinal: 1 }],
+      },
+    ]);
     expect(graph.nodes).toEqual([
       { name: "Mara Vey", importance: 1, role: "protagonist" },
       { name: "Joren Vey", importance: 1, role: "supporting" },
     ]);
     expect(graph.edges).toEqual([]);
+  });
+
+  it("emits no locations entries when the canon establishes none", async () => {
+    const chapters = [
+      "Introducing Mara Vey, keeper of the northern light.",
+      "Introducing Joren Vey, once keeper before her.",
+    ];
+    const facts = emptyStoryFacts();
+    const summaries = [{ ordinal: 1, summary: "n/a" }];
+
+    const bible = await fakeSynthesizeBible({ chapters, facts, summaries });
+
+    expect(bible.locations).toEqual([]);
   });
 });

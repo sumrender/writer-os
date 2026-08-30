@@ -15,6 +15,8 @@ import type {
   CharacterProfile,
   CharacterRelationship,
   GraphData,
+  LocationCharacterSeen,
+  LocationProfile,
   StoryBible,
   WorldClassification,
   WorldRule,
@@ -53,6 +55,8 @@ export type {
   GraphData,
   GraphNode,
   GraphEdge,
+  LocationProfile,
+  LocationCharacterSeen,
   WorldClassification,
   WorldRule,
   WorldRuleRelation,
@@ -354,12 +358,6 @@ const parseWorldSection: Parser<WorldSection> = recordWith((r) => {
     : null;
 });
 
-const parseProfile: Parser<StoryBible["locationProfiles"][number]> = recordWith((r) => {
-  const name = required(r, "name", parseNonEmptyString);
-  const profile = required(r, "profile", parseString);
-  return name !== null && profile !== null ? { name, profile } : null;
-});
-
 const parseCharacterRelationship: Parser<CharacterRelationship> = recordWith((r) => {
   const other = required(r, "other", parseNonEmptyString);
   const summary = required(r, "summary", parseNonEmptyString);
@@ -399,6 +397,27 @@ const parseCharacterProfile: Parser<CharacterProfile> = recordWith((r) => {
         mentionOrdinals,
         relationships,
       }
+    : null;
+});
+
+const parseLocationCharacterSeen: Parser<LocationCharacterSeen> = recordWith((r) => {
+  const character = required(r, "character", parseNonEmptyString);
+  const firstCoOccurrenceOrdinal = required(r, "firstCoOccurrenceOrdinal", parsePositiveInt);
+  return character !== null && firstCoOccurrenceOrdinal !== null
+    ? { character, firstCoOccurrenceOrdinal }
+    : null;
+});
+
+/** The location profile (issue #17), field-strict: nothing optional. */
+const parseLocationProfile: Parser<LocationProfile> = recordWith((r) => {
+  const name = required(r, "name", parseNonEmptyString);
+  const description = required(r, "description", parseString);
+  const significance = required(r, "significance", parseString);
+  const charactersSeen = required(r, "charactersSeen", (v) =>
+    parseArray(v, parseLocationCharacterSeen),
+  );
+  return name !== null && description !== null && significance !== null && charactersSeen !== null
+    ? { name, description, significance, charactersSeen }
     : null;
 });
 
@@ -459,7 +478,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
   const characterProfiles = required(r, "characterProfiles", (v) =>
     parseArray(v, parseCharacterProfile),
   );
-  const locationProfiles = required(r, "locationProfiles", (v) => parseArray(v, parseProfile));
+  const locations = required(r, "locations", (v) => parseArray(v, parseLocationProfile));
   const threadRollups = required(r, "threadRollups", (v) => parseArray(v, parseThreadRollup));
   const groups = required(r, "groups", (v) => parseArray(v, parseNamedDescription));
   const itemsOfSignificance = required(r, "itemsOfSignificance", (v) =>
@@ -476,7 +495,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
     bookOverview === null ||
     world === null ||
     characterProfiles === null ||
-    locationProfiles === null ||
+    locations === null ||
     threadRollups === null ||
     groups === null ||
     itemsOfSignificance === null ||
@@ -494,7 +513,7 @@ const parseStoryBible: Parser<StoryBible> = recordWith((r) => {
     bookOverview,
     world,
     characterProfiles,
-    locationProfiles,
+    locations,
     threadRollups,
     groups,
     itemsOfSignificance,
