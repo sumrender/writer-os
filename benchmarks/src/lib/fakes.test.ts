@@ -203,23 +203,56 @@ describe("fakeSynthesizeChapterSummary", () => {
 });
 
 describe("fakeSynthesizeBible", () => {
-  it("carries the summaries, derives the graph, and seeds Locations from facts (issue #17)", async () => {
+  it("carries the summaries, derives the graph, populates character profiles from canon, and seeds Locations from facts (issue #17)", async () => {
     const chapters = [
       "Introducing Mara Vey, keeper of the northern light.\nThe scene is set in the northern light.",
       "Introducing Joren Vey, once keeper before her.",
     ];
     const facts = await fakeExtract(chapters.join("\n"), 2, emptyStoryFacts());
     const summaries = [
-      { ordinal: 1, summary: "Mara keeps the light." },
-      { ordinal: 2, summary: "Joren arrives." },
+      { ordinal: 1, summary: 'character named "Mara Vey"' },
+      { ordinal: 2, summary: 'character named "Joren Vey"' },
     ];
 
     const bible = await fakeSynthesizeBible({ chapters, facts, summaries });
 
     expect(bible.chapterSummaries).toEqual(summaries);
     const { chapterSummaries: _carried, graph, locations: _locations, ...sections } = bible;
-    const { locations: _fakeLocations, ...fakeWithoutLocations } = fakeModelSections();
+    const { locations: _fakeLocations, ...fakeWithoutLocations } = fakeModelSections({
+      facts,
+      chapterSummaries: summaries,
+    });
     expect(sections).toEqual(fakeWithoutLocations);
+    // Character profiles are canon-grounded: appearance/traits from facts,
+    // mention ordinals from whole-name scans over the summaries. Canon here
+    // establishes only names, so every prose aspect stays empty.
+    expect(bible.characterProfiles).toEqual([
+      {
+        name: "Mara Vey",
+        appearance: "",
+        personality: "",
+        definingTraits: [],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 1,
+        mentionOrdinals: [1],
+        relationships: [],
+      },
+      {
+        name: "Joren Vey",
+        appearance: "",
+        personality: "",
+        definingTraits: [],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 2,
+        mentionOrdinals: [2],
+        relationships: [],
+      },
+    ]);
+    // Sections the canon establishes nothing for stay empty placeholders.
+    expect(bible.bookOverview).toBe("");
+    expect(bible.threadRollups).toEqual([]);
     // Mara is named alongside the location in ch1; Joren is not — no co-occurrence.
     expect(bible.locations).toEqual([
       {

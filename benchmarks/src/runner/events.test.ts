@@ -398,7 +398,7 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
 
   const emptyBible = {
     bookOverview: "",
-    world: [],
+    world: { classification: "earth", description: "", rules: [] },
     characterProfiles: [],
     locations: [],
     threadRollups: [],
@@ -561,6 +561,163 @@ describe("parseBenchmarkEvent — the child-process trust boundary", () => {
     expect(parseBenchmarkEvent(withoutBibleSnapshots)).toBeNull();
     expect(parseBenchmarkEvent({ ...base, bibleSnapshots: [{ afterOrdinal: 0, bible: emptyBible }] })).toBeNull();
     expect(parseBenchmarkEvent({ ...base, synthesis: "monolith" })).toBeNull();
+  });
+
+  const maraProfile = {
+    name: "Mara Vey",
+    appearance: "her coat: salt-white wool.",
+    personality: "steady, watchful",
+    definingTraits: ["keeper's resolve"],
+    background: "raised in the light",
+    arc: "keeper's daughter to keeper",
+    firstAppearanceOrdinal: 1,
+    mentionOrdinals: [1, 2, 4],
+    relationships: [{ other: "Joren Vey", summary: "Mara Vey is the daughter of Joren Vey." }],
+  };
+
+  const chapterWithProfiles = {
+    type: "chapter.completed",
+    ordinal: 4,
+    runIndex: 1,
+    elapsedMs: 5,
+    canonEntries: 6,
+    facts: {
+      characters: [{ name: "Mara Vey" }, { name: "Joren Vey" }],
+      appearances: [],
+      relationships: [],
+      items: [],
+      locations: [],
+      threads: [],
+      worldRules: [],
+      timeline: [],
+      lexicon: [],
+      style: [],
+    },
+    chapterSummary: '"Joren Vey" is the "father" of "Mara Vey"',
+    bible: { ...emptyBible, characterProfiles: [maraProfile] },
+    synthesis: "per-section",
+  };
+
+  it("parses a bible carrying rich character profiles field-strictly", () => {
+    expect(parseBenchmarkEvent(chapterWithProfiles)?.type).toBe("chapter.completed");
+
+    // Every profile field is required and strictly typed — the parser is the
+    // child-process trust boundary for exactly the shape the validator emits.
+    for (const field of [
+      "name",
+      "appearance",
+      "personality",
+      "definingTraits",
+      "background",
+      "arc",
+      "firstAppearanceOrdinal",
+      "mentionOrdinals",
+      "relationships",
+    ] as const) {
+      const without: Record<string, unknown> = { ...maraProfile };
+      delete without[field];
+      expect(
+        parseBenchmarkEvent({
+          ...chapterWithProfiles,
+          bible: { ...emptyBible, characterProfiles: [without] },
+        }),
+        `missing "${field}" must be rejected`,
+      ).toBeNull();
+    }
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: { ...emptyBible, characterProfiles: [{ ...maraProfile, name: "" }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: { ...emptyBible, characterProfiles: [{ ...maraProfile, mentionOrdinals: [0, 1] }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: { ...emptyBible, characterProfiles: [{ ...maraProfile, mentionOrdinals: "1,2" }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: { ...emptyBible, characterProfiles: [{ ...maraProfile, firstAppearanceOrdinal: 0 }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: { ...emptyBible, characterProfiles: [{ ...maraProfile, definingTraits: [42] }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: { ...emptyBible, characterProfiles: [{ ...maraProfile, relationships: "daughter" }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: {
+          ...emptyBible,
+          characterProfiles: [{ ...maraProfile, relationships: [{ other: "Joren Vey" }] }],
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...chapterWithProfiles,
+        bible: {
+          ...emptyBible,
+          characterProfiles: [{ ...maraProfile, relationships: [{ other: "", summary: "x" }] }],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("parses location profiles with the grounded charactersSeen shape (issue #17)", () => {
+    const located = {
+      ...chapterWithProfiles,
+      bible: {
+        ...emptyBible,
+        locations: [
+          {
+            name: "the northern light",
+            description: "A lighthouse.",
+            significance: "Anchors the keeper's daily round.",
+            charactersSeen: [{ character: "Mara Vey", firstCoOccurrenceOrdinal: 1 }],
+          },
+        ],
+      },
+    };
+    expect(parseBenchmarkEvent(located)?.type).toBe("chapter.completed");
+    expect(
+      parseBenchmarkEvent({
+        ...located,
+        bible: { ...emptyBible, locations: [{ name: "the northern light" }] },
+      }),
+    ).toBeNull();
+    expect(
+      parseBenchmarkEvent({
+        ...located,
+        bible: {
+          ...emptyBible,
+          locations: [
+            {
+              name: "the northern light",
+              description: "A lighthouse.",
+              significance: "Anchors the keeper's daily round.",
+              charactersSeen: [{ character: "Mara Vey" }],
+            },
+          ],
+        },
+      }),
+    ).toBeNull();
   });
 
   it("accepts a full round-trip of the emitted mini-book stream", async () => {

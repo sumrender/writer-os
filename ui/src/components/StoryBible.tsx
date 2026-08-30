@@ -1,13 +1,22 @@
-import type { LocationProfile, StoryBible as StoryBibleState } from "@writer-os/benchmark/events";
+import type {
+  LocationProfile,
+  StoryBible as StoryBibleState,
+  WorldClassification,
+  WorldRuleRelation,
+} from "@writer-os/benchmark/events";
+import { Characters } from "./Characters.js";
 import { SectionCard, threadTone } from "./SectionCard.js";
 
 /**
- * The Story Bible viewer shell (issue #14, #17): every model section rendered
- * with an empty state, chapter summaries, and the derived graph as a labeled
- * placeholder — the data exists; the interactive rendering is the
- * Relationship Graph ticket's scope. The Locations section renders the
- * location list and per-location detail (description, significance, characters
- * seen with first co-occurrence ordinal).
+ * The Story Bible viewer shell (issue #14, #16, #17): every model section
+ * rendered with an empty state, chapter summaries, and the derived graph as a
+ * labeled placeholder — the data exists; the interactive rendering is the
+ * Relationship Graph ticket's scope. The World section (issue #16) renders
+ * the classification, description, and rules with their relation to
+ * real-world (earth) rules. Characters render through their own section
+ * (issue #15): cards plus a detail drawer. The Locations section (issue #17)
+ * renders the location list and per-location detail (description,
+ * significance, characters seen with first co-occurrence ordinal).
  */
 
 function locationHasContent(location: LocationProfile): boolean {
@@ -45,6 +54,52 @@ function LocationCard({ location }: { location: LocationProfile }) {
   );
 }
 
+function classificationTone(classification: WorldClassification): string {
+  if (classification === "earth") return "bg-sky-900/50 text-sky-200";
+  if (classification === "hybrid") return "bg-violet-900/50 text-violet-200";
+  return "bg-fuchsia-900/50 text-fuchsia-200";
+}
+
+function relationTone(relation: WorldRuleRelation): string {
+  return relation === "deviates_from_earth"
+    ? "bg-amber-900/50 text-amber-200"
+    : "bg-emerald-900/50 text-emerald-200";
+}
+
+function WorldSectionView({ world }: { world: StoryBibleState["world"] }) {
+  const established = world.description !== "" || world.rules.length > 0;
+  return (
+    <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 sm:col-span-2">
+      <h4 className="mb-2 flex items-center justify-between text-sm font-semibold text-zinc-200">
+        World
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs ${classificationTone(world.classification)}`}
+        >
+          {world.classification}
+        </span>
+      </h4>
+      {!established ? (
+        <p className="text-sm text-zinc-600">none yet</p>
+      ) : (
+        <>
+          <p className="text-sm text-zinc-300">{world.description}</p>
+          <ul className="mt-2 space-y-1">
+            {world.rules.map((rule, index) => (
+              <li key={`${index}-${rule.rule}`} className="text-zinc-300">
+                <span className="font-medium text-zinc-100">{rule.rule}</span>{" "}
+                <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${relationTone(rule.relation)}`}>
+                  {rule.relation === "deviates_from_earth" ? "deviates from earth" : "same as earth"}
+                </span>
+                {rule.note !== "" && <span className="block text-zinc-400">{rule.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function StoryBible({ bible }: { bible: StoryBibleState }) {
   // The locations card's "count" is the number of entries with actual
   // content — a list of empty stubs (description, significance, and
@@ -62,25 +117,9 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
         )}
       </section>
 
-      <SectionCard title="World" count={bible.world.length}>
-        <ul className="space-y-1">
-          {bible.world.map((w) => (
-            <li key={w.topic} className="text-zinc-300">
-              <span className="font-medium text-zinc-100">{w.topic}</span>: {w.note}
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
+      <WorldSectionView world={bible.world} />
 
-      <SectionCard title="Character profiles" count={bible.characterProfiles.length}>
-        <ul className="space-y-1">
-          {bible.characterProfiles.map((p) => (
-            <li key={p.name} className="text-zinc-300">
-              <span className="font-medium text-zinc-100">{p.name}</span>: {p.profile}
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
+      <Characters profiles={bible.characterProfiles} graph={bible.graph} />
 
       <SectionCard title="Locations" count={populatedLocations.length} emptyText="no locations established">
         <ul className="space-y-3">

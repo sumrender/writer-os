@@ -1,6 +1,6 @@
 import type { LocationCharacterSeen, LocationProfile } from "./story-bible.js";
 import type { StoryFacts } from "./story-facts.js";
-import { namePattern } from "./text-occurrence.js";
+import { wholeNameRegExp } from "./name-text.js";
 
 /**
  * Deterministic per-location derivation (issue #17): for every location the
@@ -69,10 +69,9 @@ export function deriveLocationProfiles({
 /**
  * The first chapter ordinal (1-based) at which both `character` and `location`
  * names appear in the same chapter text. Returns `undefined` when the pair
- * never co-occurs. `namePattern` allocates a fresh `RegExp` per call so the
- * global `lastIndex` from a previous chapter cannot leak across the loop —
- * the carry-over would zero the next chapter's match attempt once one chapter
- * had a hit.
+ * never co-occurs. `wholeNameRegExp` is non-global, so `.test()` never carries
+ * `lastIndex` state across the chapter loop — a hit in one chapter cannot
+ * zero the next chapter's match attempt.
  */
 function firstCoOccurrenceOrdinal(
   chapterTexts: readonly string[],
@@ -82,7 +81,7 @@ function firstCoOccurrenceOrdinal(
   for (let index = 0; index < chapterTexts.length; index += 1) {
     const text = chapterTexts[index];
     if (text === undefined) continue;
-    if (namePattern(character).test(text) && namePattern(location).test(text)) {
+    if (wholeNameRegExp(character).test(text) && wholeNameRegExp(location).test(text)) {
       return index + 1;
     }
   }

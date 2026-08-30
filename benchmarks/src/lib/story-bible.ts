@@ -1,4 +1,4 @@
-import type { ThreadStatus } from "./story-facts.js";
+import type { StoryFacts, ThreadStatus } from "./story-facts.js";
 
 /**
  * Story Bible shape (issue #14, refined in #17): the synthesized, author-facing
@@ -34,14 +34,60 @@ export interface LocationProfile {
   readonly charactersSeen: readonly LocationCharacterSeen[];
 }
 
-export interface WorldNote {
-  readonly topic: string;
+/** The World slice (issue #16): classification, description, and the world's
+ * rules stated in explicit relation to real-world (earth) rules. */
+export const WORLD_CLASSIFICATIONS = ["earth", "fantasy", "supernatural", "hybrid"] as const;
+export type WorldClassification = (typeof WORLD_CLASSIFICATIONS)[number];
+
+/** How one world rule relates to the real-world (earth) rules it deviates
+ * from or agrees with. */
+export const WORLD_RULE_RELATIONS = ["same_as_earth", "deviates_from_earth"] as const;
+export type WorldRuleRelation = (typeof WORLD_RULE_RELATIONS)[number];
+
+export interface WorldRule {
+  readonly rule: string;
+  readonly relation: WorldRuleRelation;
+  /** Prose stating the relation to earth rules in detail. */
   readonly note: string;
+}
+
+export interface WorldSection {
+  readonly classification: WorldClassification;
+  readonly description: string;
+  readonly rules: readonly WorldRule[];
 }
 
 export interface ProfileEntry {
   readonly name: string;
   readonly profile: string;
+}
+
+/** One prose-form relationship summary inside a character profile (issue #15). */
+export interface CharacterRelationship {
+  /** The other party, spelled exactly as canon establishes the name. */
+  readonly other: string;
+  /** The relationship in prose, grounded in canon relationship facts. */
+  readonly summary: string;
+}
+
+/**
+ * The rich character profile (issue #15): every aspect distilled from Story
+ * Facts and chapter summaries, never from the chapter text alone. Prose
+ * aspects canon establishes nothing about are the empty string — never
+ * invented.
+ */
+export interface CharacterProfile {
+  readonly name: string;
+  readonly appearance: string;
+  readonly personality: string;
+  readonly definingTraits: readonly string[];
+  readonly background: string;
+  readonly arc: string;
+  /** Ordinal of the first chapter that mentions the character. */
+  readonly firstAppearanceOrdinal: number;
+  /** Every ordinal whose summary mentions the character, ascending, unique. */
+  readonly mentionOrdinals: readonly number[];
+  readonly relationships: readonly CharacterRelationship[];
 }
 
 export interface ThreadRollup {
@@ -74,8 +120,8 @@ export interface StyleField {
 /** The sections the Synthesize port models and validates. */
 export interface ModelSections {
   readonly bookOverview: string;
-  readonly world: readonly WorldNote[];
-  readonly characterProfiles: readonly ProfileEntry[];
+  readonly world: WorldSection;
+  readonly characterProfiles: readonly CharacterProfile[];
   /**
    * Per-location bible entries (issue #17): description, narrative
    * significance, and characters seen at the location with the ordinal of
@@ -125,6 +171,18 @@ export interface StoryBible extends ModelSections {
   readonly graph: GraphData;
 }
 
+/**
+ * The canon view every model section's validator and deterministic fake sees
+ * (issue #15): Story Facts as of the synthesis ordinal plus the chapter
+ * summaries so far — the same grounding synthesis is held to. Raw chapter
+ * text is deliberately absent: profiles derive from facts and summaries,
+ * never from the chapter text alone.
+ */
+export interface SectionCanon {
+  readonly facts: StoryFacts;
+  readonly chapterSummaries: readonly ChapterSummaryEntry[];
+}
+
 /** One per-ordinal bible state, mirroring the extraction snapshot discipline. */
 export interface BibleSnapshot {
   readonly afterOrdinal: number;
@@ -135,10 +193,15 @@ export function emptyGraphData(): GraphData {
   return { nodes: [], edges: [] };
 }
 
+/** The valid EMPTY world placeholder: nothing established beyond earth rules. */
+export function emptyWorldSection(): WorldSection {
+  return { classification: "earth", description: "", rules: [] };
+}
+
 export function emptyStoryBible(): StoryBible {
   return {
     bookOverview: "",
-    world: [],
+    world: emptyWorldSection(),
     characterProfiles: [],
     locations: [],
     threadRollups: [],

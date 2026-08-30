@@ -4,6 +4,7 @@ import {
   validateLocationsGrounded,
   type SectionGrounding,
 } from "./grounded-locations.js";
+import { emptyStoryFacts } from "./story-facts.js";
 
 /**
  * The locations section validator (issue #17): the registry validator
@@ -12,6 +13,10 @@ import {
  * well-formed but unsupported by the canon (invented places, invented
  * characters, fabricated co-occurrence ordinals, omitted characters).
  */
+
+/** The registry validator seen through a bare canon — locations ignores it. */
+const validateShape = (raw: unknown) =>
+  BIBLE_SECTIONS.locations.validate(raw, { facts: emptyStoryFacts(), chapterSummaries: [] });
 
 const VALID_ENTRY = {
   name: "the northern light",
@@ -30,20 +35,20 @@ const GROUNDING: SectionGrounding = {
 
 describe("locations validator — shape", () => {
   it("rejects a non-array payload", () => {
-    expect(() => BIBLE_SECTIONS.locations.validate("not an array")).toThrow(
+    expect(() => validateShape("not an array")).toThrow(
       /locations: must be an array of \{name, description, significance, charactersSeen\} entries/,
     );
   });
 
   it("rejects an entry that is not an object", () => {
-    expect(() => BIBLE_SECTIONS.locations.validate(["a string"])).toThrow(
+    expect(() => validateShape(["a string"])).toThrow(
       /entry #0 must be an object with a non-empty "name"/,
     );
   });
 
   it("rejects an entry with a missing name", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         { description: "d", significance: "s", charactersSeen: [] },
       ]),
     ).toThrow(/entry #0 "name" must be a non-empty string/);
@@ -51,7 +56,7 @@ describe("locations validator — shape", () => {
 
   it("rejects an entry with an empty name", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         { name: "", description: "d", significance: "s", charactersSeen: [] },
       ]),
     ).toThrow(/entry #0 "name" must be a non-empty string/);
@@ -59,7 +64,7 @@ describe("locations validator — shape", () => {
 
   it("rejects an entry with a missing description", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         { name: "x", significance: "s", charactersSeen: [] },
       ]),
     ).toThrow(/entry #0 "description" must be a non-empty string/);
@@ -67,7 +72,7 @@ describe("locations validator — shape", () => {
 
   it("rejects an entry with an empty description", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         { name: "x", description: "", significance: "s", charactersSeen: [] },
       ]),
     ).toThrow(/entry #0 "description" must be a non-empty string/);
@@ -75,7 +80,7 @@ describe("locations validator — shape", () => {
 
   it("rejects an entry with a missing significance", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         { name: "x", description: "d", charactersSeen: [] },
       ]),
     ).toThrow(/entry #0 "significance" must be a non-empty string/);
@@ -83,7 +88,7 @@ describe("locations validator — shape", () => {
 
   it("rejects an entry whose charactersSeen is not an array", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         { name: "x", description: "d", significance: "s", charactersSeen: "junk" },
       ]),
     ).toThrow(/entry #0 "charactersSeen" must be an array/);
@@ -91,7 +96,7 @@ describe("locations validator — shape", () => {
 
   it("rejects a charactersSeen entry that is not an object", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         {
           name: "x",
           description: "d",
@@ -104,7 +109,7 @@ describe("locations validator — shape", () => {
 
   it("rejects a charactersSeen entry with a non-string character", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         {
           name: "x",
           description: "d",
@@ -117,7 +122,7 @@ describe("locations validator — shape", () => {
 
   it("rejects a charactersSeen entry with a non-positive integer ordinal", () => {
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         {
           name: "x",
           description: "d",
@@ -127,7 +132,7 @@ describe("locations validator — shape", () => {
       ]),
     ).toThrow(/"firstCoOccurrenceOrdinal" must be a positive integer/);
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         {
           name: "x",
           description: "d",
@@ -137,7 +142,7 @@ describe("locations validator — shape", () => {
       ]),
     ).toThrow(/"firstCoOccurrenceOrdinal" must be a positive integer/);
     expect(() =>
-      BIBLE_SECTIONS.locations.validate([
+      validateShape([
         {
           name: "x",
           description: "d",
@@ -149,7 +154,7 @@ describe("locations validator — shape", () => {
   });
 
   it("accepts a well-formed entry with empty charactersSeen", () => {
-    const result = BIBLE_SECTIONS.locations.validate([
+    const result = validateShape([
       { name: "x", description: "d", significance: "s", charactersSeen: [] },
     ]);
     expect(result).toEqual([
@@ -158,7 +163,7 @@ describe("locations validator — shape", () => {
   });
 
   it("accepts the trust-boundary case, even with unknown names", () => {
-    const result = BIBLE_SECTIONS.locations.validate([VALID_ENTRY]);
+    const result = validateShape([VALID_ENTRY]);
     expect(result).toEqual([VALID_ENTRY]);
   });
 });

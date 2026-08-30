@@ -1,6 +1,6 @@
 import type { GraphData, GraphNode } from "./story-bible.js";
 import type { StoryFacts } from "./story-facts.js";
-import { namePattern } from "./text-occurrence.js";
+import { wholeNameRegExp } from "./name-text.js";
 
 /**
  * Deterministic graph-data derivation (issue #14): the data layer of the
@@ -13,7 +13,7 @@ import { namePattern } from "./text-occurrence.js";
 
 /** Case-sensitive whole-name occurrence count: letter boundaries on both sides. */
 function countOccurrences(chapterTexts: readonly string[], name: string): number {
-  const pattern = namePattern(name);
+  const pattern = wholeNameRegExp(name);
   let count = 0;
   for (const text of chapterTexts) {
     count += text.split(pattern).length - 1;

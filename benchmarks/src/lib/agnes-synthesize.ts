@@ -21,7 +21,12 @@ import {
   validateLocationsGrounded,
   type SectionGrounding,
 } from "./grounded-locations.js";
-import type { ModelSectionKey, ModelSections, StoryBible } from "./story-bible.js";
+import type {
+  ModelSectionKey,
+  ModelSections,
+  SectionCanon,
+  StoryBible,
+} from "./story-bible.js";
 import { storyBibleFromSections } from "./story-bible.js";
 import { deriveGraphData } from "./bible-graph.js";
 import {
@@ -370,16 +375,17 @@ export function createAgnesBibleSynthesizer(
     label: "bible",
   });
 
-/**
-   * One section's forced-tool call. The locations section (issue #17) is the
-   * only section that consults a grounding context; the registry validator
-   * stays pure-shape and the grounding-aware variant lives in
-   * `grounded-locations.ts`. The shape check is therefore applied uniformly
-   * via `spec.validate`; only locations additionally cross-checks the canon.
+  /**
+   * One section's forced-tool call. Every section's shape check runs uniformly
+   * via `spec.validate` against the section canon; only locations (issue #17)
+   * additionally cross-checks the chapter texts, through the grounding-aware
+   * variant in `grounded-locations.ts` — the registry validator stays
+   * pure-shape because the section canon cannot see chapter texts.
    */
   const attemptSection = async <K extends ModelSectionKey>(
     spec: BibleSectionSpec<K>,
     user: string,
+    canon: SectionCanon,
     grounding?: SectionGrounding,
   ): Promise<ModelSections[K]> =>
     withRetry(log, `bible section ${spec.key}`, user, BIBLE_RETRY_INSTRUCTIONS, async (prompt) => {
@@ -400,10 +406,14 @@ export function createAgnesBibleSynthesizer(
       if (spec.key === "locations" && grounding !== undefined) {
         return validateLocationsGrounded(value, grounding) as ModelSections[K];
       }
-      return spec.validate(value);
+      return spec.validate(value, canon);
     });
 
-  const attemptMonolithic = async (user: string, grounding?: SectionGrounding): Promise<ModelSections> =>
+  const attemptMonolithic = async (
+    user: string,
+    canon: SectionCanon,
+    grounding?: SectionGrounding,
+  ): Promise<ModelSections> =>
     withRetry(log, "bible assembly", user, BIBLE_RETRY_INSTRUCTIONS, async (prompt) => {
       const payload = parseToolObject(
         firstForcedToolArguments(
@@ -418,7 +428,7 @@ export function createAgnesBibleSynthesizer(
         ),
         "bible",
       );
-      const sections = validateBible(payload);
+      const sections = validateBible(payload, canon);
       if (grounding === undefined) return sections;
       const rawLocations = payload[BIBLE_SECTIONS.locations.wireKey];
       return { ...sections, locations: validateLocationsGrounded(rawLocations, grounding) };
@@ -430,6 +440,14 @@ export function createAgnesBibleSynthesizer(
     const bookText = bookView(input.chapters);
     assertWithinContextWindow("bible synthesis", [BIBLE_SYSTEM, factsText, summariesText, bookText]);
 
+    // The canon view every section validator grounds against: facts and
+    // summaries as of this ordinal — never the raw chapter text alone.
+    const canon: SectionCanon = {
+      facts: input.facts,
+      chapterSummaries: input.summaries,
+    };
+    // Locations additionally cross-check the chapter texts (issue #17): the
+    // derivation supplies the grounding context the section canon excludes.
     const profiles = deriveLocationProfiles({ facts: input.facts, chapterTexts: input.chapters });
     const grounding: SectionGrounding = {
       knownLocationNames: knownLocationNames(input.facts),
@@ -442,6 +460,7 @@ export function createAgnesBibleSynthesizer(
     if (strategy === "monolithic") {
       sections = await attemptMonolithic(
         bibleSynthesisUserPrompt({ ...shared, sectionsBlock: bibleMasterPrompt() }),
+        canon,
         grounding,
       );
     } else {
@@ -451,36 +470,54 @@ export function createAgnesBibleSynthesizer(
           sectionsBlock: BIBLE_SECTIONS[key].instruction,
         });
       sections = {
-        bookOverview: await attemptSection(BIBLE_SECTIONS.bookOverview, sectionPrompt("bookOverview")),
-        world: await attemptSection(BIBLE_SECTIONS.world, sectionPrompt("world")),
+        bookOverview: await attemptSection(
+          BIBLE_SECTIONS.bookOverview,
+          sectionPrompt("bookOverview"),
+          canon,
+        ),
+        world: await attemptSection(BIBLE_SECTIONS.world, sectionPrompt("world"), canon),
         characterProfiles: await attemptSection(
           BIBLE_SECTIONS.characterProfiles,
           sectionPrompt("characterProfiles"),
+          canon,
         ),
         locations: await attemptSection(
           BIBLE_SECTIONS.locations,
           sectionPrompt("locations"),
+          canon,
           grounding,
         ),
         threadRollups: await attemptSection(
           BIBLE_SECTIONS.threadRollups,
           sectionPrompt("threadRollups"),
+          canon,
         ),
-        groups: await attemptSection(BIBLE_SECTIONS.groups, sectionPrompt("groups")),
+        groups: await attemptSection(BIBLE_SECTIONS.groups, sectionPrompt("groups"), canon),
         itemsOfSignificance: await attemptSection(
           BIBLE_SECTIONS.itemsOfSignificance,
           sectionPrompt("itemsOfSignificance"),
+          canon,
         ),
-        lexiconNotes: await attemptSection(BIBLE_SECTIONS.lexiconNotes, sectionPrompt("lexiconNotes")),
-        openLoops: await attemptSection(BIBLE_SECTIONS.openLoops, sectionPrompt("openLoops")),
-        styleRollup: await attemptSection(BIBLE_SECTIONS.styleRollup, sectionPrompt("styleRollup")),
+        lexiconNotes: await attemptSection(
+          BIBLE_SECTIONS.lexiconNotes,
+          sectionPrompt("lexiconNotes"),
+          canon,
+        ),
+        openLoops: await attemptSection(BIBLE_SECTIONS.openLoops, sectionPrompt("openLoops"), canon),
+        styleRollup: await attemptSection(
+          BIBLE_SECTIONS.styleRollup,
+          sectionPrompt("styleRollup"),
+          canon,
+        ),
         worldTimeline: await attemptSection(
           BIBLE_SECTIONS.worldTimeline,
           sectionPrompt("worldTimeline"),
+          canon,
         ),
         bookTimeline: await attemptSection(
           BIBLE_SECTIONS.bookTimeline,
           sectionPrompt("bookTimeline"),
+          canon,
         ),
       };
     }

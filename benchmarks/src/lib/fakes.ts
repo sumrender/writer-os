@@ -240,8 +240,8 @@ export const fakeSynthesizeChapterSummary: SynthesizeChapterSummary = async ({
  * Options for the deterministic fake bible synthesizer. `deriveLocations`
  * defaults to the production derivation so the fake matches the real
  * synthesizer's contract by default; tests that want the registry-uniform
- * placeholder behavior (every section is `BIBLE_SECTIONS.x.fake()`) inject
- * a deriver that returns `[]`.
+ * placeholder behavior (every section is `BIBLE_SECTIONS.x.fake(canon)`)
+ * inject a deriver that returns `[]`.
  */
 export interface FakeSynthesizeBibleOptions {
   readonly deriveLocations?: DeriveLocationProfiles;
@@ -249,7 +249,7 @@ export interface FakeSynthesizeBibleOptions {
 
 /**
  * Deterministic fake bible synthesizer: seeds every model section via the
- * registry's `fake()` and replaces `locations` with the grounding
+ * registry's canon-seen `fake()` and replaces `locations` with the grounding
  * derivation. Mirrors the real synthesizer's contract — both always ground
  * their locations when the canon establishes places (Liskov: same inputs →
  * same shape).
@@ -259,7 +259,7 @@ export function createFakeSynthesizeBible(
 ): SynthesizeBible {
   const deriveLocations = options.deriveLocations ?? deriveLocationProfiles;
   return async ({ chapters, facts, summaries }) => {
-    const sections = fakeModelSections();
+    const sections = fakeModelSections({ facts, chapterSummaries: summaries });
     return storyBibleFromSections(
       {
         ...sections,
@@ -273,7 +273,7 @@ export function createFakeSynthesizeBible(
 
 /**
  * Default-configured deterministic fake bible synthesizer. Mirrors the
- * production synthesizer's contract: every section is registry-faked and
- * `locations` is grounded via `deriveLocationProfiles`.
+ * production synthesizer's contract: every section is registry-faked through
+ * the section canon and `locations` is grounded via `deriveLocationProfiles`.
  */
 export const fakeSynthesizeBible: SynthesizeBible = createFakeSynthesizeBible();
