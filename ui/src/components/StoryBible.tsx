@@ -3,6 +3,7 @@ import type {
   WorldClassification,
   WorldRuleRelation,
 } from "@writer-os/benchmark/events";
+import { Characters } from "./Characters.js";
 import { SectionCard, threadTone } from "./SectionCard.js";
 
 /**
@@ -11,7 +12,8 @@ import { SectionCard, threadTone } from "./SectionCard.js";
  * placeholder — the data exists; the interactive rendering is the
  * Relationship Graph ticket's scope. The World section (issue #16) renders
  * the classification, description, and rules with their relation to
- * real-world (earth) rules.
+ * real-world (earth) rules. Characters render through their own section
+ * (issue #15): cards plus a detail drawer.
  */
 
 function classificationTone(classification: WorldClassification): string {
@@ -74,15 +76,7 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
 
       <WorldSectionView world={bible.world} />
 
-      <SectionCard title="Character profiles" count={bible.characterProfiles.length}>
-        <ul className="space-y-1">
-          {bible.characterProfiles.map((p) => (
-            <li key={p.name} className="text-zinc-300">
-              <span className="font-medium text-zinc-100">{p.name}</span>: {p.profile}
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
+      <Characters profiles={bible.characterProfiles} graph={bible.graph} />
 
       <SectionCard title="Location profiles" count={bible.locationProfiles.length}>
         <ul className="space-y-1">

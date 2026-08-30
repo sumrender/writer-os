@@ -203,22 +203,53 @@ describe("fakeSynthesizeChapterSummary", () => {
 });
 
 describe("fakeSynthesizeBible", () => {
-  it("carries the summaries and derives the graph, leaving sections as empty placeholders", async () => {
+  it("carries the summaries, derives the graph, and populates character profiles from canon", async () => {
     const chapters = [
       "Introducing Mara Vey, keeper of the northern light.",
       "Introducing Joren Vey, once keeper before her.",
     ];
     const facts = await fakeExtract(chapters.join("\n"), 2, emptyStoryFacts());
     const summaries = [
-      { ordinal: 1, summary: "Mara keeps the light." },
-      { ordinal: 2, summary: "Joren arrives." },
+      { ordinal: 1, summary: 'character named "Mara Vey"' },
+      { ordinal: 2, summary: 'character named "Joren Vey"' },
     ];
 
     const bible = await fakeSynthesizeBible({ chapters, facts, summaries });
 
     expect(bible.chapterSummaries).toEqual(summaries);
     const { chapterSummaries: _carried, graph, ...sections } = bible;
-    expect(sections).toEqual(fakeModelSections({ chapters, facts, summaries }));
+    expect(sections).toEqual(fakeModelSections({ facts, chapterSummaries: summaries }));
+    // Character profiles are canon-grounded: appearance/traits from facts,
+    // mention ordinals from whole-name scans over the summaries. Canon here
+    // establishes only names, so every prose aspect stays empty.
+    expect(bible.characterProfiles).toEqual([
+      {
+        name: "Mara Vey",
+        appearance: "",
+        personality: "",
+        definingTraits: [],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 1,
+        mentionOrdinals: [1],
+        relationships: [],
+      },
+      {
+        name: "Joren Vey",
+        appearance: "",
+        personality: "",
+        definingTraits: [],
+        background: "",
+        arc: "",
+        firstAppearanceOrdinal: 2,
+        mentionOrdinals: [2],
+        relationships: [],
+      },
+    ]);
+    // Sections the canon establishes nothing for stay empty placeholders.
+    expect(bible.bookOverview).toBe("");
+    expect(bible.locationProfiles).toEqual([]);
+    expect(bible.threadRollups).toEqual([]);
     expect(graph.nodes).toEqual([
       { name: "Mara Vey", importance: 1, role: "protagonist" },
       { name: "Joren Vey", importance: 1, role: "supporting" },

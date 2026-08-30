@@ -1,7 +1,6 @@
-import { isPlainObject, nonEmptyString } from "./schema-primitives.js";
-import { failSection } from "./section-errors.js";
+import { failSection, isPlainObject, nonEmptyString } from "./schema-primitives.js";
 import type { StoryFacts } from "./story-facts.js";
-import type { BibleSynthesisInput } from "./pipeline.js";
+import type { SectionCanon } from "./story-bible.js";
 import {
   WORLD_CLASSIFICATIONS,
   WORLD_RULE_RELATIONS,
@@ -19,7 +18,7 @@ import type { SectionWireSchema } from "./section-wire.js";
  * Derives from world-rule facts and chapter summaries — the validator
  * rejects world content the canon does not support (a non-earth
  * classification, or a deviating rule, with no world-rule facts behind it),
- * and the deterministic fake derives its section from the synthesis inputs
+ * and the deterministic fake derives its section from the section canon
  * without inventing rules.
  */
 
@@ -200,7 +199,7 @@ function hasSupernaturalMarker(topics: readonly string[]): boolean {
 }
 
 /**
- * Deterministic fake: derives the world from the synthesis inputs — one
+ * Deterministic fake: derives the world from the section canon — one
  * deviating rule per canon world rule, an earth-baseline rule when canon
  * establishes none, and a description composed only from established
  * settings and world rules. Invents nothing: every claim traces to a fact.
@@ -212,8 +211,8 @@ function hasSupernaturalMarker(topics: readonly string[]): boolean {
  * world's deviations are occult; hybrid otherwise (earth-like world bending
  * real rules without going full occult).
  */
-export function fakeWorld(input: BibleSynthesisInput): WorldSection {
-  const { facts, summaries } = input;
+export function fakeWorld(canon: SectionCanon): WorldSection {
+  const { facts, chapterSummaries } = canon;
   const topics = facts.worldRules.map((entry) => entry.topic);
   const hasEarthAnchors =
     facts.characters.length > 0 || facts.locations.length > 0 || facts.items.length > 0;
@@ -242,7 +241,7 @@ export function fakeWorld(input: BibleSynthesisInput): WorldSection {
           note: `Canon establishes "${topic}", which real-world (earth) rules do not allow.`,
         }));
 
-  const through = `as of chapter ${summaries.length}`;
+  const through = `as of chapter ${chapterSummaries.length}`;
   const settings = facts.locations.map((location) => location.name);
   const description =
     topics.length === 0

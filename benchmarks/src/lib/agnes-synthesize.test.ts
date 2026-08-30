@@ -62,7 +62,10 @@ const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
       },
     ],
   },
-  characterProfiles: ["Bare Name"],
+  // The model's character-profile response: names grounded in BIBLE_INPUT's
+  // facts, ordinals within the summaries' range. Missing prose aspects are
+  // normalized to "" by the validator — asserted below.
+  characterProfiles: [{ name: "Mara Vey", firstAppearanceOrdinal: 1, mentionOrdinals: [1, 2] }],
   locationProfiles: [{ name: "the light", profile: "A lighthouse." }],
   threadRollups: [{ thread: "the ledger", status: "open", rollup: "r" }],
   groups: [],
@@ -74,6 +77,19 @@ const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
   bookTimeline: ["event two"],
 };
 
+/** The canon-grounded profile the synthesizer must produce for BIBLE_INPUT. */
+const MARA_PROFILE = {
+  name: "Mara Vey",
+  appearance: "",
+  personality: "",
+  definingTraits: [],
+  background: "",
+  arc: "",
+  firstAppearanceOrdinal: 1,
+  mentionOrdinals: [1, 2],
+  relationships: [],
+};
+
 const SECTION_RESPONSES = MODEL_SECTION_KEYS.map((key) => sectionResponse(SECTION_VALUES[key]));
 
 const BIBLE_INPUT = (): {
@@ -82,7 +98,11 @@ const BIBLE_INPUT = (): {
   summaries: readonly { readonly ordinal: number; readonly summary: string }[];
 } => ({
   chapters: ["Chapter one text.", "Chapter two text."],
-  facts: emptyStoryFacts(),
+  facts: {
+    ...emptyStoryFacts(),
+    characters: [{ name: "Mara Vey" }],
+    relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
+  },
   summaries: [
     { ordinal: 1, summary: "One." },
     { ordinal: 2, summary: "Two." },
@@ -193,11 +213,19 @@ describe("createAgnesBibleSynthesizer — per-section", () => {
       expect(String(requests[index]?.user)).toContain(BIBLE_SECTIONS[key].instruction);
       expect(String(requests[index]?.user)).toContain("Chapter 2: Two.");
     }
-    // Validators normalized the recoverable bare-string character profile.
-    expect(bible.characterProfiles).toEqual([{ name: "Bare Name", profile: "" }]);
+    // Validators normalize the profile's missing prose aspects to "".
+    expect(bible.characterProfiles).toEqual([MARA_PROFILE]);
     expect(bible.bookOverview).toBe("An overview.");
     expect(bible.chapterSummaries).toEqual(input.summaries);
-    expect(bible.graph).toEqual({ nodes: [], edges: [] });
+    // The graph derives deterministically from the input facts: the character
+    // node plus the relationship endpoint, with the relationship edge.
+    expect(bible.graph).toEqual({
+      nodes: [
+        { name: "Mara Vey", importance: 0, role: "protagonist" },
+        { name: "Joren Vey", importance: 0, role: "supporting" },
+      ],
+      edges: [{ from: "Mara Vey", to: "Joren Vey", relation: "daughter" }],
+    });
   });
 
   it("retries a failing section inline and still assembles the bible", async () => {
@@ -239,7 +267,7 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
       bibleResponse({
         book_overview: "An overview.",
         world: { classification: "earth", description: "", rules: [] },
-        character_profiles: [],
+        character_profiles: [MARA_PROFILE],
         location_profiles: [],
         thread_rollups: [],
         groups: [],
@@ -261,7 +289,9 @@ describe("createAgnesBibleSynthesizer — monolithic", () => {
     const prompt = String(requests[0]?.user);
     expect(prompt).toContain("book_overview:");
     expect(prompt).toContain("book_timeline:");
+    expect(prompt).toContain("character_profiles:");
     expect(bible.bookOverview).toBe("An overview.");
+    expect(bible.characterProfiles).toEqual([MARA_PROFILE]);
     expect(bible.chapterSummaries).toEqual(input.summaries);
   });
 
@@ -286,7 +316,7 @@ describe("synthesis response cache", () => {
       bibleResponse({
         book_overview: "An overview.",
         world: { classification: "earth", description: "", rules: [] },
-        character_profiles: [],
+        character_profiles: [MARA_PROFILE],
         location_profiles: [],
         thread_rollups: [],
         groups: [],

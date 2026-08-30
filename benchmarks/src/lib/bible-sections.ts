@@ -1,8 +1,12 @@
-import { isPlainObject, nonEmptyString, positiveInt } from "./schema-primitives.js";
-import { failSection } from "./section-errors.js";
+import {
+  failSection,
+  isPlainObject,
+  nonEmptyString,
+  positiveInt,
+} from "./schema-primitives.js";
+import { THREAD_STATUSES, type ThreadStatus } from "./story-facts.js";
 import type { SectionWireSchema } from "./section-wire.js";
-import { THREAD_STATUSES, type ThreadStatus, type StoryFacts } from "./story-facts.js";
-import type { BibleSynthesisInput } from "./pipeline.js";
+import { fakeCharacterProfiles, validateCharacterProfiles } from "./character-profiles.js";
 import {
   WORLD_INSTRUCTION,
   WORLD_WIRE_SCHEMA,
@@ -16,6 +20,7 @@ import type {
   NamedDescription,
   OpenLoop,
   ProfileEntry,
+  SectionCanon,
   StyleField,
   ThreadRollup,
   WorldSection,
@@ -26,9 +31,12 @@ import type {
  * registry through which every aspect contributes its section's prompt block,
  * wire shape, validator, and deterministic fake. The master prompt assembles
  * the per-section blocks; the master `validateBible` delegates per-section
- * validation; the deterministic fake dispatches per-section fakes. Aspects
- * grow the bible by adding registry entries — the machinery itself never
- * edits a stable core per section (CODING_STANDARDS §3.2).
+ * validation; the deterministic fake dispatches per-section fakes. Validators
+ * and fakes see the section canon (facts + summaries so far, issue #15), so
+ * aspects ground their sections — e.g. character profiles reject unsourced
+ * entities — and fakes populate from the same canon. Aspects grow the bible
+ * by adding registry entries — the machinery itself never edits a stable core
+ * per section (CODING_STANDARDS §3.2).
  */
 
 /**
@@ -46,19 +54,21 @@ export interface BibleSectionSpec<K extends ModelSectionKey> {
   readonly instruction: string;
   readonly wireSchema: SectionWireSchema;
   /**
-   * Trust-boundary validation: returns the precisely-typed section value or
-   * throws with a `near:` raw-payload snippet. Unknown fields are dropped,
-   * recoverable shapes normalized, missing/ambiguous shapes rejected. The
-   * canon (Story Facts) is passed so sections can reject content the canon
-   * does not support (issue #16); sections that need no canon check ignore it.
+   * Trust-boundary validation against the section canon: returns the
+   * precisely-typed section value or throws with a `near:` raw-payload
+   * snippet. Unknown fields are dropped, recoverable shapes normalized,
+   * missing/ambiguous shapes rejected. Sections ground against the canon to
+   * reject content it does not support (issue #15: unsourced characters;
+   * issue #16: unsupported world deviations); sections needing no check
+   * ignore it.
    */
-  readonly validate: (raw: unknown, canon: StoryFacts) => ModelSections[K];
+  readonly validate: (raw: unknown, canon: SectionCanon) => ModelSections[K];
   /**
-   * Deterministic fake deriving the section from the synthesis inputs.
-   * Baseline sections still emit valid EMPTY placeholders; aspects with real
-   * derivation logic (e.g. World, issue #16) populate from the canon.
+   * Deterministic fake seen through the section canon: an EMPTY placeholder
+   * whenever the canon establishes nothing, canon-grounded content otherwise
+   * (e.g. World, issue #16, derives even from bare canon).
    */
-  readonly fake: (input: BibleSynthesisInput) => ModelSections[K];
+  readonly fake: (canon: SectionCanon) => ModelSections[K];
 }
 
 /** A bare mention the model emitted where an object entry was expected. */
@@ -138,24 +148,24 @@ const REGISTRY = {
     wireKey: "world",
     instruction: WORLD_INSTRUCTION,
     wireSchema: WORLD_WIRE_SCHEMA,
-    validate: (raw, canon): WorldSection => validateWorld(raw, canon),
-    fake: (input): WorldSection => fakeWorld(input),
+    validate: (raw, canon): WorldSection => validateWorld(raw, canon.facts),
+    fake: (canon): WorldSection => fakeWorld(canon),
   },
   characterProfiles: {
     key: "characterProfiles",
     wireKey: "character_profiles",
-    instruction:
-      "character_profiles: per-character profile distillations drawn from canon. Value: an array of {name, profile} objects.",
+    instruction: [
+      "character_profiles: one profile per established character, distilled from Story Facts and chapter summaries — never from the chapter text alone.",
+      "Value: an array of {name, appearance, personality, definingTraits, background, arc, firstAppearanceOrdinal, mentionOrdinals, relationships} objects where",
+      "appearance/personality/background/arc are prose (leave a field empty only when the canon establishes nothing for it),",
+      "definingTraits is an array of short trait strings, firstAppearanceOrdinal is the first chapter ordinal mentioning the character,",
+      "mentionOrdinals is the ascending list of chapter ordinals mentioning the character (it must include firstAppearanceOrdinal),",
+      "and relationships is an array of {other, summary} objects — other is the counterpart's exact canon name and summary is the relationship in prose.",
+      "Every established character needs exactly one profile; never introduce a name the canon does not establish.",
+    ].join(" "),
     wireSchema: { type: "array", items: { type: "object" } },
-    validate: (raw): readonly ProfileEntry[] =>
-      parseObjectArray<ProfileEntry>(
-        "characterProfiles",
-        raw,
-        { identity: "name", secondary: "profile" },
-        (name, profile) => ({ name, profile }),
-        (name) => ({ name, profile: "" }),
-      ),
-    fake: () => [],
+    validate: validateCharacterProfiles,
+    fake: fakeCharacterProfiles,
   },
   locationProfiles: {
     key: "locationProfiles",
@@ -339,11 +349,13 @@ function requireSectionValue(
 /**
  * Master monolithic validator: a flat payload of wireKey properties, unknown
  * top-level keys dropped, every section validated by its registered
- * validator against the canon, a missing section rejected. Genuinely
- * malformed or ambiguous section values propagate the precise per-section
- * rejection — nothing silently reaches the bible.
+ * validator against the section canon, a missing section rejected.
+ * Genuinely malformed, ambiguous, or unsourced (e.g. a character profile
+ * introducing an entity canon never establishes, or a world deviation no
+ * canon world rule supports) section values propagate the precise
+ * per-section rejection — nothing silently reaches the bible.
  */
-export function validateBible(raw: unknown, canon: StoryFacts): ModelSections {
+export function validateBible(raw: unknown, canon: SectionCanon): ModelSections {
   if (!isPlainObject(raw)) {
     failSection("bible", "payload must be an object", raw);
   }
@@ -413,20 +425,26 @@ export function bibleMasterPrompt(): string {
   ].join("\n");
 }
 
-/** Deterministic fake dispatch across every registered section fake. */
-export function fakeModelSections(input: BibleSynthesisInput): ModelSections {
+/**
+ * Deterministic fake dispatch across every registered section fake, seen
+ * through the section canon: sections the canon establishes nothing for
+ * ship valid empty placeholders; grounded sections populate (issue #15:
+ * character profiles; issue #16: the world, which derives even from bare
+ * canon).
+ */
+export function fakeModelSections(canon: SectionCanon): ModelSections {
   return {
-    bookOverview: BIBLE_SECTIONS.bookOverview.fake(input),
-    world: BIBLE_SECTIONS.world.fake(input),
-    characterProfiles: BIBLE_SECTIONS.characterProfiles.fake(input),
-    locationProfiles: BIBLE_SECTIONS.locationProfiles.fake(input),
-    threadRollups: BIBLE_SECTIONS.threadRollups.fake(input),
-    groups: BIBLE_SECTIONS.groups.fake(input),
-    itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.fake(input),
-    lexiconNotes: BIBLE_SECTIONS.lexiconNotes.fake(input),
-    openLoops: BIBLE_SECTIONS.openLoops.fake(input),
-    styleRollup: BIBLE_SECTIONS.styleRollup.fake(input),
-    worldTimeline: BIBLE_SECTIONS.worldTimeline.fake(input),
-    bookTimeline: BIBLE_SECTIONS.bookTimeline.fake(input),
+    bookOverview: BIBLE_SECTIONS.bookOverview.fake(canon),
+    world: BIBLE_SECTIONS.world.fake(canon),
+    characterProfiles: BIBLE_SECTIONS.characterProfiles.fake(canon),
+    locationProfiles: BIBLE_SECTIONS.locationProfiles.fake(canon),
+    threadRollups: BIBLE_SECTIONS.threadRollups.fake(canon),
+    groups: BIBLE_SECTIONS.groups.fake(canon),
+    itemsOfSignificance: BIBLE_SECTIONS.itemsOfSignificance.fake(canon),
+    lexiconNotes: BIBLE_SECTIONS.lexiconNotes.fake(canon),
+    openLoops: BIBLE_SECTIONS.openLoops.fake(canon),
+    styleRollup: BIBLE_SECTIONS.styleRollup.fake(canon),
+    worldTimeline: BIBLE_SECTIONS.worldTimeline.fake(canon),
+    bookTimeline: BIBLE_SECTIONS.bookTimeline.fake(canon),
   };
 }

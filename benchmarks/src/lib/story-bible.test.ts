@@ -6,9 +6,13 @@ import {
   fakeModelSections,
   validateBible,
 } from "./bible-sections.js";
-import { emptyStoryBible, emptyWorldSection, storyBibleFromSections } from "./story-bible.js";
-import { emptyStoryFacts, type StoryFacts } from "./story-facts.js";
-import type { BibleSynthesisInput } from "./pipeline.js";
+import {
+  emptyStoryBible,
+  emptyWorldSection,
+  storyBibleFromSections,
+  type SectionCanon,
+} from "./story-bible.js";
+import { emptyStoryFacts } from "./story-facts.js";
 
 /**
  * Composition machinery for Story Bible synthesis (issue #14): the section
@@ -18,19 +22,23 @@ import type { BibleSynthesisInput } from "./pipeline.js";
  * discipline: unknown fields dropped, missing fields rejected, recoverable
  * shapes normalized, `near:` snippets on every rejection, and genuinely
  * ambiguous payloads hard-failing — nothing silently reaches the bible.
+ * Since issue #15 every validator and fake also grounds against the section
+ * canon (facts + summaries), so the tests validate against a canon too.
  */
 
-/** Canon backing the world section of {@link VALID_PAYLOAD}: one deviating rule. */
-const CANON: StoryFacts = {
-  ...emptyStoryFacts(),
-  worldRules: [{ topic: "the northern light burns without oil" }],
+/** Canon backing {@link VALID_PAYLOAD}: one deviating world rule and the
+ * characters its character profiles are grounded in. */
+const CANON: SectionCanon = {
+  facts: {
+    ...emptyStoryFacts(),
+    characters: [{ name: "Mara Vey" }],
+    relationships: [{ from: "Mara Vey", to: "Joren Vey", relationType: "daughter" }],
+    worldRules: [{ topic: "the northern light burns without oil" }],
+  },
+  chapterSummaries: [{ ordinal: 1, summary: "Mara Vey keeps the light; Joren Vey visits." }],
 };
 
-const EMPTY_INPUT: BibleSynthesisInput = {
-  chapters: [],
-  facts: emptyStoryFacts(),
-  summaries: [],
-};
+const EMPTY_CANON: SectionCanon = { facts: emptyStoryFacts(), chapterSummaries: [] };
 
 const VALID_PAYLOAD = {
   book_overview: "A keeper's tale of light and ledgers.",
@@ -45,7 +53,21 @@ const VALID_PAYLOAD = {
       },
     ],
   },
-  character_profiles: [{ name: "Mara Vey", profile: "Keeper of the light." }],
+  character_profiles: [
+    {
+      name: "Mara Vey",
+      appearance: "her coat: salt-white wool.",
+      personality: "steady, watchful",
+      definingTraits: ["keeper's resolve"],
+      background: "raised in the light",
+      arc: "keeper's daughter to keeper",
+      firstAppearanceOrdinal: 1,
+      mentionOrdinals: [1],
+      relationships: [
+        { other: "Joren Vey", summary: "Mara Vey is the daughter of Joren Vey." },
+      ],
+    },
+  ],
   location_profiles: [{ name: "the northern light", profile: "A lighthouse." }],
   thread_rollups: [
     { thread: "the missing ledger", status: "resolved", rollup: "Found and burned." },
@@ -82,11 +104,19 @@ describe("section registry", () => {
 
   it("ships valid empty placeholders per section, World deriving from the canon", () => {
     const { chapterSummaries: _carried, graph: _derived, ...empty } = emptyStoryBible();
-    const sections = fakeModelSections(EMPTY_INPUT);
+    const sections = fakeModelSections(EMPTY_CANON);
     expect({ ...sections, world: emptyWorldSection() }).toEqual(empty);
     // The world fake is canon-derived, never an inert placeholder.
     expect(sections.world.classification).toBe("earth");
     expect(sections.world.rules.length).toBeGreaterThan(0);
+  });
+
+  it("populates character profiles from a canon that establishes characters", () => {
+    const sections = fakeModelSections(CANON);
+    expect(sections.characterProfiles.map((p) => p.name)).toEqual(["Mara Vey"]);
+    expect(sections.characterProfiles[0]?.mentionOrdinals).toEqual([1]);
+    // Every other section the canon establishes nothing for stays empty.
+    expect(sections.locationProfiles).toEqual([]);
   });
 
   it("marks bookOverview a string section, World an object section, the rest arrays", () => {
@@ -128,19 +158,24 @@ describe("per-section trust boundary (via the registry validators)", () => {
     for (const key of MODEL_SECTION_KEYS) {
       const wireValue = VALID_PAYLOAD[BIBLE_SECTIONS[key].wireKey as keyof typeof VALID_PAYLOAD];
       expect(BIBLE_SECTIONS[key].validate(wireValue, CANON)).toEqual(
-        BIBLE_SECTIONS[key].fake(EMPTY_INPUT) === "" ? VALID_PAYLOAD.book_overview : wireValue,
+        BIBLE_SECTIONS[key].fake(CANON) === "" ? VALID_PAYLOAD.book_overview : wireValue,
       );
     }
   });
 
   it("normalizes bare-string entries into recoverable {identity, secondary} shapes", () => {
-    expect(BIBLE_SECTIONS.characterProfiles.validate(["Mara Vey"], CANON)).toEqual([
-      { name: "Mara Vey", profile: "" },
+    expect(BIBLE_SECTIONS.lexiconNotes.validate(["Vess"], CANON)).toEqual([
+      { term: "Vess", note: "" },
     ]);
-    expect(BIBLE_SECTIONS.lexiconNotes.validate(["Vess"], CANON)).toEqual([{ term: "Vess", note: "" }]);
     expect(BIBLE_SECTIONS.styleRollup.validate(["narration"], CANON)).toEqual([
       { field: "narration", value: "" },
     ]);
+  });
+
+  it("rejects bare strings for character profiles — the rich shape is not recoverable", () => {
+    expect(() => BIBLE_SECTIONS.characterProfiles.validate(["Mara Vey"], CANON)).toThrow(
+      /characterProfiles: entry #0 must be an object with a non-empty "name"/,
+    );
   });
 
   it("drops unknown fields on entries but keeps the canonical shape", () => {
@@ -264,5 +299,19 @@ describe("validateBible — monolithic trust boundary", () => {
     expect(() =>
       validateBible({ ...VALID_PAYLOAD, groups: [{ description: "no name" }] }, CANON),
     ).toThrow(/groups: entry #0 "name" must be a non-empty string/);
+  });
+
+  it("rejects character profiles that introduce unsourced entities (canon-grounded)", () => {
+    expect(() =>
+      validateBible(
+        {
+          ...VALID_PAYLOAD,
+          character_profiles: [
+            { ...VALID_PAYLOAD.character_profiles[0], name: "Bellin the harbormaster" },
+          ],
+        },
+        CANON,
+      ),
+    ).toThrow(/introduces unsourced character "Bellin the harbormaster"/);
   });
 });

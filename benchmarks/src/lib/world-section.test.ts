@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyStoryFacts, type StoryFacts } from "./story-facts.js";
-import { WORLD_CLASSIFICATIONS, WORLD_RULE_RELATIONS } from "./story-bible.js";
-import type { BibleSynthesisInput } from "./pipeline.js";
+import { WORLD_CLASSIFICATIONS, WORLD_RULE_RELATIONS, type SectionCanon } from "./story-bible.js";
 import { WORLD_INSTRUCTION, WORLD_WIRE_SCHEMA, fakeWorld, validateWorld } from "./world-section.js";
 
 /**
@@ -9,8 +8,8 @@ import { WORLD_INSTRUCTION, WORLD_WIRE_SCHEMA, fakeWorld, validateWorld } from "
  * description, and rules stated in relation to real-world (earth) rules.
  * The validator enforces shape at the trust boundary AND canon support —
  * non-earth classifications and deviating rules must trace to world-rule
- * facts; the fake derives the section deterministically from the synthesis
- * inputs, inventing nothing.
+ * facts; the fake derives the section deterministically from the section
+ * canon, inventing nothing.
  */
 
 const CANON_WITH_RULES: StoryFacts = {
@@ -18,8 +17,8 @@ const CANON_WITH_RULES: StoryFacts = {
   worldRules: [{ topic: "the northern light burns without oil" }],
 };
 
-function inputWith(overrides: Partial<BibleSynthesisInput>): BibleSynthesisInput {
-  return { chapters: [], facts: emptyStoryFacts(), summaries: [], ...overrides };
+function canonWith(overrides: Partial<SectionCanon>): SectionCanon {
+  return { facts: emptyStoryFacts(), chapterSummaries: [], ...overrides };
 }
 
 describe("validateWorld — shape", () => {
@@ -228,9 +227,9 @@ describe("validateWorld — canon support", () => {
 describe("fakeWorld", () => {
   it("derives an earth-classified baseline when canon establishes no world rules", () => {
     const world = fakeWorld(
-      inputWith({
+      canonWith({
         facts: { ...emptyStoryFacts(), characters: [{ name: "Tom Sawyer" }] },
-        summaries: [{ ordinal: 1, summary: "s" }],
+        chapterSummaries: [{ ordinal: 1, summary: "s" }],
       }),
     );
     expect(world.classification).toBe("earth");
@@ -246,13 +245,13 @@ describe("fakeWorld", () => {
 
   it("derives a hybrid world with one deviating rule per canon world rule", () => {
     const world = fakeWorld(
-      inputWith({
+      canonWith({
         facts: {
           ...CANON_WITH_RULES,
           characters: [{ name: "Mara Vey" }],
           locations: [{ name: "the northern light" }],
         },
-        summaries: [
+        chapterSummaries: [
           { ordinal: 1, summary: "a" },
           { ordinal: 2, summary: "b" },
         ],
@@ -271,7 +270,7 @@ describe("fakeWorld", () => {
   });
 
   it("derives a fantasy classification when deviations have no earth anchors", () => {
-    const world = fakeWorld(inputWith({ facts: CANON_WITH_RULES }));
+    const world = fakeWorld(canonWith({ facts: CANON_WITH_RULES }));
     expect(world.classification).toBe("fantasy");
   });
 
@@ -281,19 +280,19 @@ describe("fakeWorld", () => {
       characters: [{ name: "Mara Vey" }],
       worldRules: [{ topic: "ghosts walk the harbor at midnight" }],
     };
-    const world = fakeWorld(inputWith({ facts: canon }));
+    const world = fakeWorld(canonWith({ facts: canon }));
     expect(world.classification).toBe("supernatural");
     expect(() => validateWorld(world, canon)).not.toThrow();
   });
 
   it("is deterministic across runs", () => {
-    const input = inputWith({ facts: CANON_WITH_RULES, summaries: [{ ordinal: 1, summary: "s" }] });
-    expect(fakeWorld(input)).toEqual(fakeWorld(input));
+    const canon = canonWith({ facts: CANON_WITH_RULES, chapterSummaries: [{ ordinal: 1, summary: "s" }] });
+    expect(fakeWorld(canon)).toEqual(fakeWorld(canon));
   });
 
   it("emits sections its own validator accepts", () => {
     for (const facts of [emptyStoryFacts(), CANON_WITH_RULES]) {
-      const world = fakeWorld(inputWith({ facts }));
+      const world = fakeWorld(canonWith({ facts }));
       expect(() => validateWorld(world, facts)).not.toThrow();
     }
   });
