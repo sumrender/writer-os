@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { StoryBible as StoryBibleState } from "@writer-os/benchmark/events";
 import { SectionCard, threadTone } from "./SectionCard.js";
 
@@ -117,25 +118,7 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
         </ul>
       </SectionCard>
 
-      <SectionCard title="World timeline" count={bible.worldTimeline.length}>
-        <ol className="list-decimal space-y-1 pl-5">
-          {bible.worldTimeline.map((event, i) => (
-            <li key={i} className="text-zinc-300">
-              {event}
-            </li>
-          ))}
-        </ol>
-      </SectionCard>
-
-      <SectionCard title="Book timeline" count={bible.bookTimeline.length}>
-        <ol className="list-decimal space-y-1 pl-5">
-          {bible.bookTimeline.map((event, i) => (
-            <li key={i} className="text-zinc-300">
-              {event}
-            </li>
-          ))}
-        </ol>
-      </SectionCard>
+      <TimelinesCard worldTimeline={bible.worldTimeline} bookTimeline={bible.bookTimeline} />
 
       <SectionCard title="Chapter summaries" count={bible.chapterSummaries.length}>
         <ol className="list-decimal space-y-1 pl-5">
@@ -159,5 +142,84 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
         </p>
       </section>
     </div>
+  );
+}
+
+function TimelinesCard({
+  worldTimeline,
+  bookTimeline,
+}: {
+  worldTimeline: StoryBibleState["worldTimeline"];
+  bookTimeline: StoryBibleState["bookTimeline"];
+}) {
+  const [view, setView] = useState<"world" | "book">("world");
+  const totalEvents = view === "world" ? worldTimeline.length : bookTimeline.reduce((sum, e) => sum + e.events.length, 0);
+
+  return (
+    <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 sm:col-span-2">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-zinc-200">Timelines</h4>
+        <div className="flex rounded-md border border-zinc-700 bg-zinc-950">
+          <button
+            type="button"
+            onClick={() => setView("world")}
+            className={`px-3 py-1 text-xs font-medium transition ${
+              view === "world"
+                ? "bg-zinc-700 text-zinc-100"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            World
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("book")}
+            className={`px-3 py-1 text-xs font-medium transition ${
+              view === "book"
+                ? "bg-zinc-700 text-zinc-100"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Book
+          </button>
+        </div>
+      </div>
+      <p className="mb-2 text-xs text-zinc-500">
+        {view === "world"
+          ? "In-world chronological order — events marked stated (directly from canon prose) or inferred (synthesized ordering)."
+          : "Narration order keyed by chapter ordinal."}
+      </p>
+      {totalEvents === 0 ? (
+        <p className="text-sm text-zinc-600">none yet</p>
+      ) : view === "world" ? (
+        <ol className="list-decimal space-y-1 pl-5">
+          {worldTimeline.map((entry, i) => (
+            <li key={i} className="text-zinc-300">
+              {entry.event}
+              <span
+                className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                  entry.grounding === "stated"
+                    ? "bg-emerald-900/50 text-emerald-200"
+                    : "bg-amber-900/50 text-amber-200"
+                }`}
+              >
+                {entry.grounding}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <ol className="list-decimal space-y-2 pl-5">
+          {bookTimeline.map((entry) => (
+            <li key={entry.ordinal} className="text-zinc-300">
+              <span className="mr-2 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400">
+                ch. {entry.ordinal}
+              </span>
+              {entry.events.join("; ")}
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }

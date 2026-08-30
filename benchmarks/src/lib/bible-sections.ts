@@ -1,6 +1,7 @@
 import { isPlainObject, nonEmptyString, positiveInt } from "./schema-primitives.js";
 import { THREAD_STATUSES, type ThreadStatus } from "./story-facts.js";
 import type {
+  BookTimelineEntry,
   LexiconNote,
   ModelSectionKey,
   ModelSections,
@@ -9,8 +10,11 @@ import type {
   ProfileEntry,
   StyleField,
   ThreadRollup,
+  TimelineGrounding,
   WorldNote,
+  WorldTimelineEvent,
 } from "./story-bible.js";
+import { TIMELINE_GROUNDINGS } from "./story-bible.js";
 
 /**
  * Composition machinery for Story Bible synthesis (issue #14, ADR-0007): the
@@ -122,6 +126,10 @@ function parseStringArray(where: string, raw: unknown): readonly string[] {
 
 function isThreadStatus(value: unknown): value is ThreadStatus {
   return typeof value === "string" && (THREAD_STATUSES as readonly string[]).includes(value);
+}
+
+function isTimelineGrounding(value: unknown): value is TimelineGrounding {
+  return typeof value === "string" && (TIMELINE_GROUNDINGS as readonly string[]).includes(value);
 }
 
 const REGISTRY = {
@@ -311,18 +319,56 @@ const REGISTRY = {
     key: "worldTimeline",
     wireKey: "world_timeline",
     instruction:
-      "world_timeline: in-world events in established order, independent of the book's telling. Value: an array of strings.",
-    wireSchema: { type: "array", items: { type: "string" } },
-    validate: (raw): readonly string[] => parseStringArray("worldTimeline", raw),
+      "world_timeline: in-world events in established chronological order, independent of the book's telling. Value: an array of {event, grounding} objects where grounding is one of stated, inferred.",
+    wireSchema: { type: "array", items: { type: "object" } },
+    validate: (raw): readonly WorldTimelineEvent[] => {
+      if (!Array.isArray(raw)) {
+        failSection("worldTimeline", "must be an array of {event, grounding} entries", raw);
+      }
+      return raw.map((entry, index): WorldTimelineEvent => {
+        if (!isPlainObject(entry)) {
+          failSection("worldTimeline", `entry #${index} must be an object`, entry);
+        }
+        const event = entry["event"];
+        if (!nonEmptyString(event)) {
+          failSection("worldTimeline", `entry #${index} "event" must be a non-empty string`, entry);
+        }
+        const grounding = entry["grounding"];
+        if (!isTimelineGrounding(grounding)) {
+          failSection(
+            "worldTimeline",
+            `entry #${index} "grounding" must be one of ${TIMELINE_GROUNDINGS.join(", ")}`,
+            entry,
+          );
+        }
+        return { event, grounding };
+      });
+    },
     fake: () => [],
   },
   bookTimeline: {
     key: "bookTimeline",
     wireKey: "book_timeline",
     instruction:
-      "book_timeline: the book's events in narration order. Value: an array of strings.",
-    wireSchema: { type: "array", items: { type: "string" } },
-    validate: (raw): readonly string[] => parseStringArray("bookTimeline", raw),
+      "book_timeline: the book's events mapped to chapter ordinals in narration order. Value: an array of {ordinal, events} objects where ordinal is the chapter ordinal and events is an array of strings.",
+    wireSchema: { type: "array", items: { type: "object" } },
+    validate: (raw): readonly BookTimelineEntry[] => {
+      if (!Array.isArray(raw)) {
+        failSection("bookTimeline", "must be an array of {ordinal, events} entries", raw);
+      }
+      return raw.map((entry, index): BookTimelineEntry => {
+        if (!isPlainObject(entry)) {
+          failSection("bookTimeline", `entry #${index} must be an object`, entry);
+        }
+        const ordinal = entry["ordinal"];
+        if (!positiveInt(ordinal)) {
+          failSection("bookTimeline", `entry #${index} "ordinal" must be a positive integer`, entry);
+        }
+        const eventsRaw = entry["events"];
+        const events = parseStringArray(`bookTimeline[${ordinal}]events`, eventsRaw);
+        return { ordinal, events };
+      });
+    },
     fake: () => [],
   },
 } satisfies { readonly [K in ModelSectionKey]: BibleSectionSpec<K> };

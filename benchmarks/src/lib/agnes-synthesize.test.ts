@@ -60,8 +60,8 @@ const SECTION_VALUES: { readonly [K in ModelSectionKey]: unknown } = {
   lexiconNotes: [],
   openLoops: [{ description: "Who burned it?", openedAtOrdinal: 1 }],
   styleRollup: [{ field: "narration", value: "close third" }],
-  worldTimeline: ["event one"],
-  bookTimeline: ["event two"],
+  worldTimeline: [{ event: "event one", grounding: "stated" }],
+  bookTimeline: [{ ordinal: 1, events: ["event two"] }],
 };
 
 const SECTION_RESPONSES = MODEL_SECTION_KEYS.map((key) => sectionResponse(SECTION_VALUES[key]));

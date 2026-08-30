@@ -154,10 +154,21 @@ describe("mini-book fixture", () => {
     expect(bibleSnapshots.map((s) => s.afterOrdinal)).toEqual([1, 2, 3, 4]);
     const finalBible = bibleSnapshots.at(-1)?.bible;
     expect(finalBible?.chapterSummaries).toEqual(summaries);
-    // Placeholders: every model section ships valid and empty.
+    // Placeholders: every model section ships valid and empty except timelines.
     expect(finalBible?.bookOverview).toBe("");
     expect(finalBible?.characterProfiles).toEqual([]);
     expect(finalBible?.locationProfiles).toEqual([]);
+
+    // World timeline: all events are stated (directly from prose), in narration order.
+    expect(finalBible?.worldTimeline).toEqual([
+      { event: "the harbor bell rang", grounding: "stated" },
+      { event: "the ledger burned", grounding: "stated" },
+    ]);
+    // Book timeline: events mapped to the ordinals that reveal them.
+    expect(finalBible?.bookTimeline).toEqual([
+      { ordinal: 1, events: ["the harbor bell rang"] },
+      { ordinal: 3, events: ["the ledger burned"] },
+    ]);
     // The derived graph: Mara Vey is mentioned 5 times, Joren Vey 4.
     expect(finalBible?.graph.nodes).toEqual([
       { name: "Mara Vey", importance: 5, role: "protagonist" },

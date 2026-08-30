@@ -31,8 +31,11 @@ const VALID_PAYLOAD = {
   lexicon_notes: [{ term: "Vess", note: "The keeper family's name." }],
   open_loops: [{ description: "Who burned the ledger?", openedAtOrdinal: 3 }],
   style_rollup: [{ field: "narration", value: "close third person, past tense" }],
-  world_timeline: ["the northern light was lit"],
-  book_timeline: ["the harbor bell rang", "the ledger burned"],
+  world_timeline: [{ event: "the northern light was lit", grounding: "stated" }],
+  book_timeline: [
+    { ordinal: 1, events: ["the harbor bell rang"] },
+    { ordinal: 3, events: ["the ledger burned"] },
+  ],
 };
 
 /** The message's `near:` payload snippet, never longer than the extraction cap. */
@@ -66,8 +69,6 @@ describe("section registry", () => {
       const schema = BIBLE_SECTIONS[key].wireSchema;
       if (key === "bookOverview") {
         expect(schema).toEqual({ type: "string" });
-      } else if (key === "worldTimeline" || key === "bookTimeline") {
-        expect(schema).toEqual({ type: "array", items: { type: "string" } });
       } else {
         expect(schema).toEqual({ type: "array", items: { type: "object" } });
       }
@@ -90,7 +91,12 @@ describe("per-section trust boundary (via the registry validators)", () => {
   it("validates each section of a well-formed payload", () => {
     for (const key of MODEL_SECTION_KEYS) {
       const wireValue = VALID_PAYLOAD[BIBLE_SECTIONS[key].wireKey as keyof typeof VALID_PAYLOAD];
-      expect(BIBLE_SECTIONS[key].validate(wireValue)).toEqual(BIBLE_SECTIONS[key].fake() === "" ? VALID_PAYLOAD.book_overview : wireValue);
+      const validated = BIBLE_SECTIONS[key].validate(wireValue);
+      if (key === "bookOverview") {
+        expect(validated).toEqual(VALID_PAYLOAD.book_overview);
+      } else {
+        expect(validated).toEqual(wireValue);
+      }
     }
   });
 
@@ -150,12 +156,27 @@ describe("per-section trust boundary (via the registry validators)", () => {
     ).toThrow(/"openedAtOrdinal" must be a positive integer/);
   });
 
-  it("rejects timeline sections with non-string entries", () => {
-    expect(() => BIBLE_SECTIONS.worldTimeline.validate( ["fine", 3])).toThrow(
-      /worldTimeline: entry #1 must be a non-empty string/,
+  it("rejects worldTimeline with non-object entries and invalid grounding", () => {
+    expect(() => BIBLE_SECTIONS.worldTimeline.validate(["fine"])).toThrow(
+      /worldTimeline: entry #0 must be an object/,
     );
-    expect(() => BIBLE_SECTIONS.bookTimeline.validate( "not an array")).toThrow(
-      /bookTimeline: must be an array of strings/,
+    expect(() =>
+      BIBLE_SECTIONS.worldTimeline.validate([{ event: "the light was lit" }]),
+    ).toThrow(/"grounding" must be one of stated, inferred/);
+    expect(() =>
+      BIBLE_SECTIONS.worldTimeline.validate([{ event: "", grounding: "stated" }]),
+    ).toThrow(/"event" must be a non-empty string/);
+  });
+
+  it("rejects bookTimeline with non-object entries and missing ordinal", () => {
+    expect(() => BIBLE_SECTIONS.bookTimeline.validate("not an array")).toThrow(
+      /bookTimeline: must be an array of \{ordinal, events\} entries/,
+    );
+    expect(() => BIBLE_SECTIONS.bookTimeline.validate([{ events: ["x"] }])).toThrow(
+      /"ordinal" must be a positive integer/,
+    );
+    expect(() => BIBLE_SECTIONS.bookTimeline.validate([{ ordinal: 1, events: [3] }])).toThrow(
+      /bookTimeline\[1\]events: entry #0 must be a non-empty string/,
     );
   });
 
@@ -193,8 +214,11 @@ describe("validateBible — monolithic trust boundary", () => {
       lexiconNotes: VALID_PAYLOAD.lexicon_notes,
       openLoops: VALID_PAYLOAD.open_loops,
       styleRollup: VALID_PAYLOAD.style_rollup,
-      worldTimeline: VALID_PAYLOAD.world_timeline,
-      bookTimeline: VALID_PAYLOAD.book_timeline,
+      worldTimeline: [{ event: "the northern light was lit", grounding: "stated" }],
+      bookTimeline: [
+        { ordinal: 1, events: ["the harbor bell rang"] },
+        { ordinal: 3, events: ["the ledger burned"] },
+      ],
     });
     expect(storyBibleFromSections(sections, [], { nodes: [], edges: [] })).toEqual({
       ...sections,
