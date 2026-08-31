@@ -7,19 +7,22 @@ import type {
   WorldRuleRelation,
 } from "@writer-os/benchmark/events";
 import { Characters } from "./Characters.js";
+import { RelationshipGraph } from "./RelationshipGraph.js";
 import { SectionCard, threadTone } from "./SectionCard.js";
 
 /**
- * The Story Bible viewer shell (issue #14, #16, #17): every model section
- * rendered with an empty state, chapter summaries, and the derived graph as a
- * labeled placeholder — the data exists; the interactive rendering is the
- * Relationship Graph ticket's scope. The World section (issue #16) renders
+ * The Story Bible viewer shell (issue #14, #16, #17, #20): every model
+ * section rendered with an empty state, chapter summaries, and the
+ * interactive relationship graph. The World section (issue #16) renders
  * the classification, description, and rules with their relation to
  * real-world (earth) rules. Characters render through their own section
- * (issue #15): cards plus a detail drawer. The Locations section (issue #17)
- * renders the location list and per-location detail (description,
- * significance, characters seen with first co-occurrence ordinal). The book
- * overview and thread-rollup sections carry the issue #19 prose baselines.
+ * (issue #15): cards plus a detail drawer. The Locations section (issue
+ * #17) renders the location list and per-location detail (description,
+ * significance, characters seen with first co-occurrence ordinal). The
+ * book overview and thread-rollup sections carry the issue #19 prose
+ * baselines. The Relationship Graph (issue #20) renders the derived graph
+ * interactively — pan/zoom, protagonist root, re-root on click, and the
+ * profile side panel — over data owned by the baseline's derivation.
  */
 
 /** True when every overview field is still empty (nothing to show yet). */
@@ -245,17 +248,7 @@ export function StoryBible({ bible }: { bible: StoryBibleState }) {
         </ol>
       </SectionCard>
 
-      <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-        <h4 className="mb-2 flex items-center justify-between text-sm font-semibold text-zinc-200">
-          Relationship graph
-          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-            {bible.graph.nodes.length} nodes · {bible.graph.edges.length} edges
-          </span>
-        </h4>
-        <p className="text-sm text-zinc-600">
-          Derived from Story Facts; the interactive graph ships with the Relationship Graph ticket.
-        </p>
-      </section>
+      <RelationshipGraph graph={bible.graph} profiles={bible.characterProfiles} />
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { orderCharacters, type CharacterCard } from "../shared/characters.js";
  * marked, opening into a detail drawer carrying the full profile —
  * appearance, personality, defining traits, background, arc, first
  * appearance, chapters mentioned, and the prose-form relationship list.
+ * The detail drawer is exported for reuse by the Relationship Graph's
+ * profile side panel (issue #20): one profile rendering, two entry points.
  */
 
 function LabeledField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -28,7 +30,7 @@ function ProseField({ label, text }: { label: string; text: string }) {
   );
 }
 
-function CharacterDetail({
+export function CharacterDetail({
   card,
   onClose,
 }: {
