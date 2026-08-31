@@ -3,7 +3,6 @@ import { emptyStoryFacts, type StoryFacts } from "./story-facts.js";
 import {
   coOccurrenceByLocation,
   deriveLocationProfiles,
-  knownCharacterNames,
   knownLocationNames,
 } from "./bible-locations.js";
 
@@ -186,20 +185,14 @@ describe("coOccurrenceByLocation", () => {
   });
 });
 
-describe("knownLocationNames / knownCharacterNames", () => {
+describe("knownLocationNames", () => {
   it("builds a name lookup set from the location facts", () => {
     const facts = factsWith([], ["a", "b", "c"]);
     expect(knownLocationNames(facts)).toEqual(new Set(["a", "b", "c"]));
   });
 
-  it("builds a name lookup set from the character facts", () => {
-    const facts = factsWith(["Mara Vey", "Joren Vey"], []);
-    expect(knownCharacterNames(facts)).toEqual(new Set(["Mara Vey", "Joren Vey"]));
-  });
-
   it("returns an empty set when the canon is empty", () => {
     const facts = emptyStoryFacts();
     expect(knownLocationNames(facts).size).toBe(0);
-    expect(knownCharacterNames(facts).size).toBe(0);
   });
 });

@@ -96,9 +96,3 @@ function firstCoOccurrenceOrdinal(
 export function knownLocationNames(facts: StoryFacts): ReadonlySet<string> {
   return new Set(facts.locations.map((location) => location.name));
 }
-
-/** Same as {@link knownLocationNames} but for the character kind — the
- * validator needs both sets to reject invented names on either side. */
-export function knownCharacterNames(facts: StoryFacts): ReadonlySet<string> {
-  return new Set(facts.characters.map((character) => character.name));
-}

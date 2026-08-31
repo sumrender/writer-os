@@ -380,7 +380,7 @@ const REGISTRY = {
     key: "locations",
     wireKey: "locations",
     instruction:
-      "locations: per-location bible entries drawn from canon. Value: an array of {name, description, significance, charactersSeen} objects where charactersSeen is an array of {character, firstCoOccurrenceOrdinal} listing every canon-established character who appears at the location, with the chapter ordinal of their first co-occurrence.",
+      "locations: per-location bible entries drawn from canon. Value: an array of {name, description, significance, charactersSeen} objects. Emit one entry for each location the Story Facts establish, with a description and narrative significance grounded in the canon. The charactersSeen list is derived from the chapter texts by the system, not authored here — emit an empty array for it.",
     wireSchema: { type: "array", items: { type: "object" } },
     validate: (raw): readonly LocationProfile[] => parseLocations(raw),
     fake: () => [],
@@ -443,7 +443,11 @@ const REGISTRY = {
         (name, description) => ({ name, description }),
         (name) => ({ name, description: "" }),
       ),
-    fake: () => [],
+    fake: ({ facts }): readonly NamedDescription[] =>
+      facts.items.map((entry) => ({
+        name: entry.item,
+        description: `Canon holds "${entry.item}" with "${entry.holder}".`,
+      })),
   },
   lexiconNotes: {
     key: "lexiconNotes",
@@ -459,7 +463,11 @@ const REGISTRY = {
         (term, note) => ({ term, note }),
         (term) => ({ term, note: "" }),
       ),
-    fake: () => [],
+    fake: ({ facts }): readonly LexiconNote[] =>
+      facts.lexicon.map((entry) => ({
+        term: entry.term,
+        note: entry.lockedSpelling ? "Spelling locked by canon." : "",
+      })),
   },
   openLoops: {
     key: "openLoops",
@@ -510,7 +518,8 @@ const REGISTRY = {
         (field, value) => ({ field, value }),
         (field) => ({ field, value: "" }),
       ),
-    fake: () => [],
+    fake: ({ facts }): readonly StyleField[] =>
+      facts.style.map((entry) => ({ field: entry.field, value: entry.value })),
   },
   worldTimeline: {
     key: "worldTimeline",
@@ -678,7 +687,8 @@ export function bibleMasterPrompt(): string {
  * through the section canon: sections the canon establishes nothing for
  * ship valid empty placeholders; grounded sections populate (issue #15:
  * character profiles; issue #16: the world, which derives even from bare
- * canon; issue #19: the overview and thread rollups).
+ * canon; issue #19: the overview and thread rollups; issue #21: the items,
+ * lexicon, and style rollups, each a direct 1:1 rendering of its fact kind).
  */
 export function fakeModelSections(canon: SectionCanon): ModelSections {
   return {

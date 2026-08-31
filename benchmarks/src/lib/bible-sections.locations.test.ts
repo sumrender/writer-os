@@ -27,7 +27,6 @@ const VALID_ENTRY = {
 
 const GROUNDING: SectionGrounding = {
   knownLocationNames: new Set(["the northern light"]),
-  knownCharacterNames: new Set(["Mara Vey", "Joren Vey"]),
   coOccurrenceByLocation: new Map([
     ["the northern light", [{ character: "Mara Vey", firstCoOccurrenceOrdinal: 1 }]],
   ]),
@@ -187,85 +186,76 @@ describe("locations validator — grounding", () => {
     );
   });
 
-  it("rejects a charactersSeen entry citing an invented character", () => {
-    expect(() =>
-      validateLocationsGrounded(
-        [
-          {
-            name: "the northern light",
-            description: "d",
-            significance: "s",
-            charactersSeen: [
-              { character: "An Outsider", firstCoOccurrenceOrdinal: 1 },
-            ],
-          },
-        ],
-        GROUNDING,
-      ),
-    ).toThrow(/"charactersSeen" includes "An Outsider" — not a canon character/);
+  it("overwrites a model-invented character in charactersSeen with the derivation", () => {
+    const result = validateLocationsGrounded(
+      [
+        {
+          name: "the northern light",
+          description: "d",
+          significance: "s",
+          charactersSeen: [{ character: "An Outsider", firstCoOccurrenceOrdinal: 1 }],
+        },
+      ],
+      GROUNDING,
+    );
+    // The invented sighting never reaches the bible: the derived list wins.
+    expect(result[0]?.charactersSeen).toEqual([
+      { character: "Mara Vey", firstCoOccurrenceOrdinal: 1 },
+    ]);
   });
 
-  it("rejects a character declared at a location who never co-occurs there", () => {
-    const emptyGrounding: SectionGrounding = {
-      knownLocationNames: new Set(["the northern light"]),
-      knownCharacterNames: new Set(["Mara Vey", "Joren Vey"]),
-      coOccurrenceByLocation: new Map([["the northern light", []]]),
-    };
-    expect(() =>
-      validateLocationsGrounded(
-        [
-          {
-            name: "the northern light",
-            description: "d",
-            significance: "s",
-            charactersSeen: [
-              { character: "Joren Vey", firstCoOccurrenceOrdinal: 2 },
-            ],
-          },
-        ],
-        emptyGrounding,
-      ),
-    ).toThrow(/"Joren Vey" never appears at "the northern light"/);
+  it("overwrites a miscounted firstCoOccurrenceOrdinal with the derivation", () => {
+    const result = validateLocationsGrounded(
+      [
+        {
+          name: "the northern light",
+          description: "d",
+          significance: "s",
+          charactersSeen: [{ character: "Mara Vey", firstCoOccurrenceOrdinal: 99 }],
+        },
+      ],
+      GROUNDING,
+    );
+    expect(result[0]?.charactersSeen).toEqual([
+      { character: "Mara Vey", firstCoOccurrenceOrdinal: 1 },
+    ]);
   });
 
-  it("rejects a mismatched firstCoOccurrenceOrdinal", () => {
-    expect(() =>
-      validateLocationsGrounded(
-        [
-          {
-            name: "the northern light",
-            description: "d",
-            significance: "s",
-            charactersSeen: [
-              { character: "Mara Vey", firstCoOccurrenceOrdinal: 99 },
-            ],
-          },
-        ],
-        GROUNDING,
-      ),
-    ).toThrow(/Mara Vey" first co-occurs at chapter 1 in the chapter texts but the entry says 99/);
+  it("restores a co-occurrence the model omitted from charactersSeen", () => {
+    const result = validateLocationsGrounded(
+      [{ name: "the northern light", description: "d", significance: "s", charactersSeen: [] }],
+      GROUNDING,
+    );
+    expect(result[0]?.charactersSeen).toEqual([
+      { character: "Mara Vey", firstCoOccurrenceOrdinal: 1 },
+    ]);
   });
 
-  it("rejects an entry that omits a character the derivation says co-occurs", () => {
-    expect(() =>
-      validateLocationsGrounded(
-        [
-          {
-            name: "the northern light",
-            description: "d",
-            significance: "s",
-            charactersSeen: [],
-          },
-        ],
-        GROUNDING,
-      ),
-    ).toThrow(/omits "Mara Vey" who co-occurs at "the northern light"/);
+  it("keeps the model's prose while replacing only the derived charactersSeen", () => {
+    const result = validateLocationsGrounded(
+      [
+        {
+          name: "the northern light",
+          description: "A lighthouse on the headland.",
+          significance: "Anchors the keeper's round.",
+          charactersSeen: [{ character: "Nobody", firstCoOccurrenceOrdinal: 7 }],
+        },
+      ],
+      GROUNDING,
+    );
+    expect(result).toEqual([
+      {
+        name: "the northern light",
+        description: "A lighthouse on the headland.",
+        significance: "Anchors the keeper's round.",
+        charactersSeen: [{ character: "Mara Vey", firstCoOccurrenceOrdinal: 1 }],
+      },
+    ]);
   });
 
   it("rejects an entry whose name is in canon but absent from the co-occurrence derivation", () => {
     const derivationMissing: SectionGrounding = {
       knownLocationNames: new Set(["the northern light"]),
-      knownCharacterNames: new Set(["Mara Vey"]),
       coOccurrenceByLocation: new Map(),
     };
     expect(() => validateLocationsGrounded([VALID_ENTRY], derivationMissing)).toThrow(

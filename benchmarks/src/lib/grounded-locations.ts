@@ -12,9 +12,9 @@ import { parseLocations } from "./bible-sections.js";
 
 /**
  * The grounding context: the canon-derived lookups a synthesis caller
- * supplies so the locations validator can reject content that is
- * structurally well-formed but unsupported by the canon. Not a registry
- * concern — only the synthesis path can construct this.
+ * supplies so the locations validator can reject invented places and attach
+ * the authoritative co-occurrences. Not a registry concern — only the
+ * synthesis path can construct this.
  */
 export interface SectionGrounding {
   /**
@@ -22,13 +22,11 @@ export interface SectionGrounding {
    * rejected as invented places.
    */
   readonly knownLocationNames: ReadonlySet<string>;
-  /** Names the character facts establish. */
-  readonly knownCharacterNames: ReadonlySet<string>;
   /**
    * Per-location co-occurrence map: location name → the ordered list of
-   * (character, ordinal) pairs the derivation produced. Used to confirm the
-   * validator's ordinal agrees with what the chapter texts say; a mismatch
-   * is rejected as fabrication.
+   * (character, ordinal) pairs the derivation produced. This is the
+   * authoritative `charactersSeen` the validator attaches to every accepted
+   * entry — the model's own list is discarded, never consulted.
    */
   readonly coOccurrenceByLocation: ReadonlyMap<string, readonly LocationCharacterSeen[]>;
 }
@@ -49,25 +47,23 @@ function failGround(where: string, problem: string, raw: unknown): never {
   throw new Error(`${where}: ${problem} near: ${snippet(raw)}`);
 }
 
-function charactersByName(
-  seen: readonly LocationCharacterSeen[],
-): ReadonlyMap<string, number> {
-  return new Map(seen.map((entry) => [entry.character, entry.firstCoOccurrenceOrdinal]));
-}
-
 /**
- * Parse the locations section, then run the grounding rejections: invented
- * places, invented characters, characters declared who never co-occur,
- * mismatched first-co-occurrence ordinals, omitted co-occurrences, locations
- * present in canon but absent from the derivation (a fabrication trigger —
- * the derivation runs against every canon location).
+ * Parse the locations section, then apply the grounding rules. The model owns
+ * the prose (`description`, `significance`) and the choice of which canon
+ * places to describe; `charactersSeen` is a deterministic derivation, never
+ * model-authored (`bible-locations.ts` is its single source of truth), so this
+ * validator OVERWRITES whatever the model emitted for it with the canon-derived
+ * co-occurrences — a model cannot inject a character or an ordinal the chapter
+ * texts do not support. The only model-authored field still policed is the
+ * place name: an entry naming a place the location facts never establish is
+ * rejected. (Why the contract is overwrite-not-reproduce: docs/TESTING.md §9.7.)
  */
 export function validateLocationsGrounded(
   raw: unknown,
   grounding: SectionGrounding,
 ): readonly LocationProfile[] {
   const entries = parseLocations(raw);
-  for (const [index, entry] of entries.entries()) {
+  return entries.map((entry, index) => {
     if (!grounding.knownLocationNames.has(entry.name)) {
       failGround(
         "locations",
@@ -75,49 +71,14 @@ export function validateLocationsGrounded(
         raw,
       );
     }
-    const expected = grounding.coOccurrenceByLocation.get(entry.name);
-    if (expected === undefined) {
+    const derived = grounding.coOccurrenceByLocation.get(entry.name);
+    if (derived === undefined) {
       failGround(
         "locations",
         `entry #${index} "name" "${entry.name}" has no co-occurrence derivation`,
         raw,
       );
     }
-    const expectedByCharacter = charactersByName(expected);
-    const declaredByCharacter = charactersByName(entry.charactersSeen);
-    for (const [character, declaredOrdinal] of declaredByCharacter) {
-      if (!grounding.knownCharacterNames.has(character)) {
-        failGround(
-          "locations",
-          `entry #${index} "charactersSeen" includes "${character}" — not a canon character`,
-          raw,
-        );
-      }
-      const expectedOrdinal = expectedByCharacter.get(character);
-      if (expectedOrdinal === undefined) {
-        failGround(
-          "locations",
-          `entry #${index} "${character}" never appears at "${entry.name}" in the chapter texts`,
-          raw,
-        );
-      }
-      if (declaredOrdinal !== expectedOrdinal) {
-        failGround(
-          "locations",
-          `entry #${index} "${character}" first co-occurs at chapter ${expectedOrdinal} in the chapter texts but the entry says ${declaredOrdinal}`,
-          raw,
-        );
-      }
-    }
-    for (const character of expectedByCharacter.keys()) {
-      if (!declaredByCharacter.has(character)) {
-        failGround(
-          "locations",
-          `entry #${index} omits "${character}" who co-occurs at "${entry.name}" in the chapter texts`,
-          raw,
-        );
-      }
-    }
-  }
-  return entries;
+    return { ...entry, charactersSeen: derived };
+  });
 }

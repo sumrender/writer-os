@@ -290,6 +290,7 @@ Agnes free tier allows ~20 executable requests/min. The client spaces request *s
 |---|---|---|
 | Judge verdicts (equivalence + sweep) | ✅ content-hash | `results/cache/judge-cache.json` |
 | Extraction responses | ✅ content-hash | `results/cache/extract-cache.json` |
+| Bible synthesis responses | ✅ content-hash (key folds in the strategy, so per-section and monolithic never collide) | `results/cache/synthesis-cache.json` |
 | Checker flags | ❌ fresh every run | — |
 | Generated prose | ❌ deliberately never (sampled prose is the thing measured) | — |
 
@@ -304,7 +305,9 @@ Approximate wall-clock at default spacing on the free tier:
 
 | Command | Cold cache | Warm extraction cache |
 |---|---|---|
-| mini-book (4 chapters), any axis | ~4–6 min | ~2–4 min |
+| mini-book extraction, per-section (default), 1 run | ~10 min (observed 630 s — 12 section calls/chapter at 3.5 s spacing, plus self-healing retries) | ~1 min (observed 48 s) |
+| mini-book extraction, monolithic, 1 run | ~4–5 min (observed 261 s — one assembly call/chapter) | ~3 min (observed 184 s — synthesis keys re-paid when cached extractions differ from the cold run's, see §9.7 temp-0 variance) |
+| mini-book, checker / generation axes | ~4–6 min | ~2–4 min |
 | tom-sawyer extraction (36 ch × 3 runs) | ~40–60 min | ~1–2 min |
 | gullivers-travels extraction (39 ch × 3 runs) | ~60–90 min | ~1–2 min |
 | Real-book checker axis, 3 runs | ~45–70 min | ~15–25 min |
@@ -346,7 +349,8 @@ Recorded honestly from live runs; treat as vendor-model characterizations, not h
 
 | Axis | Result | Diagnosis |
 |---|---|---|
-| Extraction | **PASS** — global precision 1.000; F1 gaps on `appearance`/`thread`/`timeline` | Model omits whole kinds in tiny chapters; lenient gates absorb it |
+| Extraction (per-section, cold) | **PASS** — global precision 1.000; F1 gaps on `appearance`/`location`/`thread` | Model omits whole kinds in tiny chapters; lenient gates absorb it. `location` recall 0 is the same omission pattern (the model rarely emits a location fact in a 4-chapter fixture), not a harness bug |
+| Extraction (monolithic, cold) | **PASS** — same global precision 1.000 | Dual-mode confirmed under live: both strategies produce valid bibles end-to-end |
 | Checker | FAIL — perturbation catch 1.000 but control FP 0.500 | Model treats quoted *dialogue* as contradicting a narration-*style* fact, beyond its written contract ("never flag stylistic variation"); prompt-contract sharpening pending |
 | Generation | FAIL — chapter 4 beats omitted in all 3 sampled drafts | Genuine prose-fidelity gap; exact missing beats visible via §9.5 evidence lines |
 
@@ -355,6 +359,10 @@ Real-book baselines accumulate under `results/runs/` — check `index.txt` for c
 ### 9.7 Trust-boundary hardening baked into the live ops
 
 The real model emits structured-output noise Agnes cannot schema-enforce (forced-tool parameters are one flat schema; no JSON-schema response mode). The ops therefore: canonicalize documented noise classes (stray cross-kind fields dropped; missing `kind` inferred only when fields resolve uniquely to one kind; thread-identity-under-`name` and bare-character mentions normalized); attach the raw payload snippet (`near: {…}`) to every validation rejection so failures are diagnosable from run logs alone; retry once with the validator error fed back before propagating failure. Genuinely ambiguous payloads still hard-fail — nothing silently reaches canon state.
+
+Locations are the strongest case of the "derive, don't ask" principle (issue #21): `charactersSeen` is a deterministic co-occurrence computation over the chapter texts (`bible-locations.ts` is its single source of truth), so the grounding validator **overwrites** whatever the model emitted for it with the derivation — the model's list is discarded, never consulted. The model owns only the prose (`description`, `significance`) and the choice of which canon places to describe; the one model-authored field still policed is the place name (an entry naming a place the location facts never establish is rejected). Demanding the model *reproduce* the derivation instead (the original #17 design) caused cold-run hard failures: the model cannot reliably emit exact ordinals for a regex computation, and unlike prose sections the mistake was not self-healable by retry.
+
+Observed live noise classes on `agnes-2.5-flash` (all self-healed by the one-retry mechanism in the issue-#21 verification runs — 3 retries cold per-section, 1 cold monolithic, both green): invented `threadRollups` when canon establishes no threads; omitted/non-integer `firstAppearanceOrdinal` in character profiles; world `classification` contradicting a deviating rule; invented location names, including case variants of a canon name (`"Northern Light"` vs canon `"northern light"`). Caveat: despite temp 0, model output varies run to run — a retry can fail with a *different* error than the first attempt (one pre-fix monolithic cold run died this way), so occasional hard failures on non-locations sections remain a vendor-model characteristic, not a harness defect.
 
 
 ## 10. Open items

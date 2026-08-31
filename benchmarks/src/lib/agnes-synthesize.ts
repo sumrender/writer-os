@@ -32,7 +32,6 @@ import { deriveGraphData } from "./bible-graph.js";
 import {
   coOccurrenceByLocation,
   deriveLocationProfiles,
-  knownCharacterNames,
   knownLocationNames,
 } from "./bible-locations.js";
 import type {
@@ -446,12 +445,12 @@ export function createAgnesBibleSynthesizer(
       facts: input.facts,
       chapterSummaries: input.summaries,
     };
-    // Locations additionally cross-check the chapter texts (issue #17): the
-    // derivation supplies the grounding context the section canon excludes.
+    // Locations additionally consult the chapter texts (issue #17): the
+    // derivation supplies the authoritative co-occurrences the section canon
+    // cannot see, so the model's `charactersSeen` is replaced by the derivation.
     const profiles = deriveLocationProfiles({ facts: input.facts, chapterTexts: input.chapters });
     const grounding: SectionGrounding = {
       knownLocationNames: knownLocationNames(input.facts),
-      knownCharacterNames: knownCharacterNames(input.facts),
       coOccurrenceByLocation: coOccurrenceByLocation(profiles),
     };
 
